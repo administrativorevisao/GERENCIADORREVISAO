@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useUsers, userName } from "../team/useUsers";
 import { useTasks, useUpdateTaskStatus } from "./useTasks";
-import { STATUS_LABEL, type Task, type TaskStatus } from "./types";
+import { STATUS_LABEL, STATUSES, type Task, type TaskStatus } from "./types";
 import { TaskModal } from "./TaskModal";
 import { dueStatus, fmtDate } from "../../shared/lib/dates";
-
-const STATUSES: TaskStatus[] = ["todo", "doing", "done"];
 
 export function TasksPage() {
   const { data: tasks, isLoading, error } = useTasks();

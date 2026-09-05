@@ -2,6 +2,8 @@ export type TaskStatus = "todo" | "doing" | "done";
 export type TaskPriority = "high" | "medium" | "low";
 export type TaskType = "project" | "recurring" | "standalone" | "process" | "weekly_objective" | "operational_event";
 
+export const STATUSES: TaskStatus[] = ["todo", "doing", "done"];
+
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: "A fazer",
   doing: "Fazendo",
