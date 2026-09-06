@@ -9,13 +9,21 @@ export function TasksPage() {
   const { data: tasks, isLoading, error } = useTasks();
   const { data: users } = useUsers();
   const updateStatus = useUpdateTaskStatus();
-  const [view, setView] = useState<"kanban" | "table">("kanban");
+  const [view, setView] = useState<"kanban" | "table" | "person">("kanban");
   const [editing, setEditing] = useState<Task | null | "new">(null);
 
   if (isLoading) return <div className="empty">Carregando tarefas…</div>;
   if (error) return <div className="empty">Erro ao carregar tarefas: {(error as Error).message}</div>;
 
   const list = tasks ?? [];
+  const allUsers = users ?? [];
+  const personGroups = [
+    ...allUsers
+      .slice()
+      .sort((a, b) => (a.shortName || a.name).localeCompare(b.shortName || b.name))
+      .map((u) => ({ key: u.id, label: u.shortName || u.name, tasks: list.filter((t) => t.responsibleId === u.id) })),
+    { key: "none", label: "Sem responsável", tasks: list.filter((t) => !t.responsibleId || !allUsers.some((u) => u.id === t.responsibleId)) },
+  ].filter((g) => g.key !== "none" || g.tasks.length > 0);
 
   return (
     <div>
@@ -27,6 +35,7 @@ export function TasksPage() {
         <div className="seg">
           <button className={view === "kanban" ? "on" : ""} onClick={() => setView("kanban")}>Kanban</button>
           <button className={view === "table" ? "on" : ""} onClick={() => setView("table")}>Tabela</button>
+          <button className={view === "person" ? "on" : ""} onClick={() => setView("person")}>Por pessoa</button>
         </div>
         <button className="btn primary sm" onClick={() => setEditing("new")}>+ Nova tarefa</button>
       </div>
@@ -120,6 +129,31 @@ export function TasksPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {list.length > 0 && view === "person" && (
+        <div className="kanban">
+          {personGroups.map((group) => (
+            <div className="kcol" key={group.key}>
+              <div className="kcol-head">
+                {group.label}
+                <span className="n">{group.tasks.length}</span>
+              </div>
+              <div className="kcol-body">
+                {group.tasks.length === 0 && <div className="hint">Nenhuma tarefa.</div>}
+                {group.tasks.map((task) => (
+                  <div key={task.id} className="kcard" data-prio={task.priority} onClick={() => setEditing(task)}>
+                    <div className="kt">{task.title}</div>
+                    <div className="kmeta">
+                      <span className={`badge b-${dueStatus(task.dueDate, task.status)}`}>{fmtDate(task.dueDate)}</span>
+                      <span className="badge">{STATUS_LABEL[task.status]}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
