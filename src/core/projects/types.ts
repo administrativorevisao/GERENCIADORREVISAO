@@ -62,7 +62,6 @@ export interface Project {
   description: string;
   iconImage: string | null;
   programId: string | null;
-  departmentId: string | null;
   ownerId: string | null;
   startDate: string;
   dueDate: string;

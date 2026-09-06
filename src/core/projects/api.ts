@@ -37,7 +37,6 @@ export function createProject(companyId: string, input: Partial<Project>) {
     description: "",
     iconImage: null,
     programId: null,
-    departmentId: null,
     ownerId: null,
     startDate: todayISO(),
     dueDate: todayISO(),

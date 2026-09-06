@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { useCreateProject } from "./useProjects";
 import type { Program } from "./types";
 import { todayISO } from "../../shared/lib/dates";
@@ -8,7 +7,6 @@ export function ProjectModal({ program, onClose }: { program?: Program; onClose:
   const createProject = useCreateProject();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [departmentId, setDepartmentId] = useState(program?.departmentId ?? "");
   const [dueDate, setDueDate] = useState(todayISO());
 
   async function handleSave() {
@@ -17,7 +15,6 @@ export function ProjectModal({ program, onClose }: { program?: Program; onClose:
       name: name.trim(),
       description,
       programId: program?.id ?? null,
-      departmentId: departmentId || null,
       dueDate,
     });
     onClose();
@@ -36,20 +33,9 @@ export function ProjectModal({ program, onClose }: { program?: Program; onClose:
             <label htmlFor="proj-desc">Descrição</label>
             <textarea id="proj-desc" className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          <div className="row">
-            <div className="field">
-              <label htmlFor="proj-dept">Setor</label>
-              <select id="proj-dept" className="input" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-                <option value="">— Nenhum —</option>
-                {STANDARD_DEPARTMENTS.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="proj-due">Prazo</label>
-              <input id="proj-due" type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </div>
+          <div className="field">
+            <label htmlFor="proj-due">Prazo</label>
+            <input id="proj-due" type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
         </div>
         <div className="modal-foot">
