@@ -5,14 +5,18 @@ import { useTasks } from "../tasks/useTasks";
 import { userName, useUsers } from "../team/useUsers";
 import { useProjects, useUpdateProject } from "./useProjects";
 import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type KeyDate, type Project } from "./types";
+import { COURSE_TYPE_LABEL, GUIA_TEMPLATES, type CourseType, type GuiaContent, type ScheduledMessage, type SectorLink } from "./guiaTemplates";
+import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { STATUS_LABEL } from "../tasks/types";
 import { dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
 
-type Tab = "briefing" | "course" | "dates" | "tasks";
+type Tab = "briefing" | "course" | "guias" | "dates" | "links" | "tasks";
 const TABS: { id: Tab; label: string }[] = [
   { id: "briefing", label: "Briefing" },
   { id: "course", label: "Curso / Edital" },
+  { id: "guias", label: "Guias por setor" },
   { id: "dates", label: "Datas-chave" },
+  { id: "links", label: "Links" },
   { id: "tasks", label: "Tarefas" },
 ];
 
@@ -58,7 +62,9 @@ export function ProjectDetailPage() {
           </div>
           {tab === "briefing" && <BriefingTab project={project} />}
           {tab === "course" && <CourseTab project={project} />}
+          {tab === "guias" && <GuiasTab project={project} />}
           {tab === "dates" && <KeyDatesTab project={project} />}
+          {tab === "links" && <LinksTab project={project} />}
           {tab === "tasks" && <TasksTab tasks={projectTasks} users={users} />}
         </div>
 
@@ -231,6 +237,192 @@ function KeyDatesTab({ project }: { project: Project }) {
           <button className="btn sm ghost" onClick={() => removeDate(k.id)}><span className="msi">delete</span></button>
         </div>
       ))}
+    </div>
+  );
+}
+
+function GuiasTab({ project }: { project: Project }) {
+  const updateProject = useUpdateProject();
+  const template = project.courseType ? GUIA_TEMPLATES[project.courseType] : null;
+  const [activeGuia, setActiveGuia] = useState<string | null>(template?.[0]?.key ?? null);
+  const [draft, setDraft] = useState<string | null>(null);
+
+  async function setCourseType(courseType: CourseType) {
+    const newTemplate = GUIA_TEMPLATES[courseType];
+    await updateProject.mutateAsync({ ...project, courseType });
+    setActiveGuia(newTemplate[0]?.key ?? null);
+  }
+
+  const currentGuia = (project.guias ?? []).find((g) => g.key === activeGuia);
+  const text = draft ?? currentGuia?.content ?? "";
+  const changed = draft !== null && draft !== (currentGuia?.content ?? "");
+
+  async function saveGuia() {
+    if (!activeGuia) return;
+    const others = (project.guias ?? []).filter((g) => g.key !== activeGuia);
+    const updated: GuiaContent[] = [...others, { key: activeGuia, content: text }];
+    await updateProject.mutateAsync({ ...project, guias: updated });
+    setDraft(null);
+  }
+
+  async function updateMessages(messages: ScheduledMessage[]) {
+    await updateProject.mutateAsync({ ...project, scheduledMessages: messages });
+  }
+
+  const item = template?.find((g) => g.key === activeGuia);
+
+  return (
+    <div>
+      <div className="field" style={{ maxWidth: 340 }}>
+        <label htmlFor="course-type">Tipo de curso</label>
+        <select id="course-type" className="input" value={project.courseType ?? ""} onChange={(e) => setCourseType(e.target.value as CourseType)}>
+          <option value="" disabled>— Selecione o modelo —</option>
+          {Object.entries(COURSE_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </div>
+
+      {!template && <div className="hint" style={{ marginTop: 12 }}>Escolha um tipo de curso para ver as guias por setor deste modelo.</div>}
+
+      {template && (
+        <>
+          <div className="seg" style={{ margin: "16px 0", flexWrap: "wrap" }}>
+            {template.map((g) => (
+              <button key={g.key} className={activeGuia === g.key ? "on" : ""} onClick={() => { setActiveGuia(g.key); setDraft(null); }}>{g.label}</button>
+            ))}
+          </div>
+          {item?.hint && <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>{item.hint}</p>}
+          <textarea
+            key={activeGuia}
+            className="input"
+            style={{ minHeight: 160 }}
+            value={text}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          {changed && (
+            <button className="btn primary sm" style={{ marginTop: 10 }} onClick={saveGuia} disabled={updateProject.isPending}>
+              {updateProject.isPending ? "Salvando…" : "Salvar guia"}
+            </button>
+          )}
+
+          {activeGuia === "EVENTO" && project.courseType === "semana_vespera" && (
+            <ScheduledMessagesTable messages={project.scheduledMessages ?? []} onChange={updateMessages} saving={updateProject.isPending} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ScheduledMessagesTable({ messages, onChange, saving }: { messages: ScheduledMessage[]; onChange: (m: ScheduledMessage[]) => void; saving: boolean }) {
+  const [label, setLabel] = useState("");
+  const [date, setDate] = useState(todayISO());
+
+  function add() {
+    if (!label.trim()) return;
+    onChange([...messages, { id: `msg_${Date.now()}`, label: label.trim(), date, status: "programar" }]);
+    setLabel("");
+  }
+  function remove(id: string) {
+    onChange(messages.filter((m) => m.id !== id));
+  }
+  function toggleStatus(id: string) {
+    onChange(messages.map((m) => (m.id === id ? { ...m, status: m.status === "enviado" ? "programar" : "enviado" } : m)));
+  }
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div className="section-title" style={{ fontSize: 13 }}>Mensagens programadas para grupos</div>
+      <div className="row" style={{ marginBottom: 12 }}>
+        <div className="field" style={{ margin: 0, flex: 2 }}>
+          <input className="input" placeholder="ex: Lembrete — aula começa em 1h" value={label} onChange={(e) => setLabel(e.target.value)} />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <button className="btn primary sm" onClick={add} disabled={!label.trim() || saving}>+ Adicionar</button>
+      </div>
+      {messages.length === 0 && <div className="hint">Nenhuma mensagem programada ainda.</div>}
+      {messages.length > 0 && (
+        <div className="tbl-wrap">
+          <table className="data">
+            <thead><tr><th>Mensagem</th><th>Data</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {messages.map((m) => (
+                <tr key={m.id}>
+                  <td>{m.label}</td>
+                  <td>{fmtDate(m.date)}</td>
+                  <td>
+                    <button className={`badge ${m.status === "enviado" ? "b-done" : "b-soft"}`} style={{ border: "none", cursor: "pointer" }} onClick={() => toggleStatus(m.id)}>
+                      {m.status === "enviado" ? "Enviado" : "Programar"}
+                    </button>
+                  </td>
+                  <td><button className="btn sm ghost" onClick={() => remove(m.id)}><span className="msi">delete</span></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LinksTab({ project }: { project: Project }) {
+  const updateProject = useUpdateProject();
+  const [departmentId, setDepartmentId] = useState(STANDARD_DEPARTMENTS[0]?.id ?? "");
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+
+  async function addLink() {
+    if (!label.trim() || !url.trim()) return;
+    const newLink: SectorLink = { id: `lnk_${Date.now()}`, departmentId, label: label.trim(), url: url.trim() };
+    await updateProject.mutateAsync({ ...project, sectorLinks: [...(project.sectorLinks ?? []), newLink] });
+    setLabel("");
+    setUrl("");
+  }
+
+  async function removeLink(id: string) {
+    await updateProject.mutateAsync({ ...project, sectorLinks: (project.sectorLinks ?? []).filter((l) => l.id !== id) });
+  }
+
+  const links = project.sectorLinks ?? [];
+
+  return (
+    <div>
+      <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+        Links úteis deste curso/projeto, organizados por setor — planilhas, pastas do Drive, formulários, etc.
+      </p>
+      <div className="row" style={{ marginBottom: 16 }}>
+        <div className="field" style={{ margin: 0 }}>
+          <select className="input" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+            {STANDARD_DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.icon} {d.name}</option>)}
+          </select>
+        </div>
+        <div className="field" style={{ margin: 0, flex: 1 }}>
+          <input className="input" placeholder="Nome do link" value={label} onChange={(e) => setLabel(e.target.value)} />
+        </div>
+        <div className="field" style={{ margin: 0, flex: 2 }}>
+          <input className="input" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
+        </div>
+        <button className="btn primary sm" onClick={addLink} disabled={!label.trim() || !url.trim() || updateProject.isPending}>+ Adicionar</button>
+      </div>
+
+      {STANDARD_DEPARTMENTS.map((d) => {
+        const deptLinks = links.filter((l) => l.departmentId === d.id);
+        if (deptLinks.length === 0) return null;
+        return (
+          <div key={d.id} style={{ marginBottom: 14 }}>
+            <div className="section-title" style={{ fontSize: 13 }}>{d.icon} {d.name}</div>
+            {deptLinks.map((l) => (
+              <div className="list-item" key={l.id}>
+                <a href={l.url} target="_blank" rel="noreferrer" style={{ flex: 1 }}>{l.label}</a>
+                <button className="btn sm ghost" onClick={() => removeLink(l.id)}><span className="msi">delete</span></button>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      {links.length === 0 && <div className="hint">Nenhum link cadastrado ainda.</div>}
     </div>
   );
 }

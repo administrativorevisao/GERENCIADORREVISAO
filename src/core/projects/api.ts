@@ -44,6 +44,10 @@ export function createProject(companyId: string, input: Partial<Project>) {
     status: "active",
     briefing: emptyBriefing,
     course: emptyCourse,
+    courseType: null,
+    guias: [],
+    scheduledMessages: [],
+    sectorLinks: [],
     ...input,
   };
   return createRow(PROJECTS_TABLE, companyId, project);

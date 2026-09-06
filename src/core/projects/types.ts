@@ -1,3 +1,5 @@
+import type { CourseType, GuiaContent, ScheduledMessage, SectorLink } from "./guiaTemplates";
+
 export type ProjectStatus = "planning" | "active" | "hold" | "done" | "cancelled";
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -69,6 +71,10 @@ export interface Project {
   status: ProjectStatus;
   briefing: Briefing;
   course: Course;
+  courseType: CourseType | null;
+  guias: GuiaContent[];
+  scheduledMessages: ScheduledMessage[];
+  sectorLinks: SectorLink[];
 }
 
 export const PROGRAM_COLORS = [
