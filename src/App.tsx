@@ -8,6 +8,7 @@ import { DashboardPage } from "./core/dashboard/DashboardPage";
 import { ProjectsPage } from "./core/projects/ProjectsPage";
 import { ProjectDetailPage } from "./core/projects/ProjectDetailPage";
 import { TasksPage } from "./core/tasks/TasksPage";
+import { ProcessCenterPage } from "./core/tasks/ProcessCenterPage";
 import { CalendarPage } from "./core/calendar/CalendarPage";
 import { MeetingsPage } from "./core/meetings/MeetingsPage";
 import { NotificationsPage } from "./core/notifications/NotificationsPage";
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/projetos" element={<ProjectsPage />} />
         <Route path="/projetos/:id" element={<ProjectDetailPage />} />
         <Route path="/tarefas" element={<TasksPage />} />
+        <Route path="/processos" element={<ProcessCenterPage />} />
         <Route path="/reunioes" element={<MeetingsPage />} />
         <Route path="/pedagogico" element={<PedagogicoPage />} />
         <Route path="/comercial" element={<ComercialPage />} />

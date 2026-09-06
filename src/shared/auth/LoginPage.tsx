@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "./AuthContext";
 import { useCompany } from "../../core/companies/CompanyContext";
+import { BrandLogo } from "../ui/BrandLogo";
 
 export function LoginPage() {
   const { signIn, error } = useAuth();
@@ -20,7 +21,7 @@ export function LoginPage() {
     <div className="login-wrap">
       <div className="login-card">
         <div className="brand" style={{ justifyContent: "center", paddingBottom: 20 }}>
-          <div className="brand-logo">{company.initials}</div>
+          <BrandLogo company={company} size={64} />
           <div className="brand-txt">
             <b>{company.name}OS</b>
             <span>{company.sub}</span>

@@ -14,6 +14,7 @@ export const NAV: NavItem[] = [
   { id: "calendar", label: "Calendário", path: "/calendario", icon: "calendar_month", group: "Visualizações" },
   { id: "projects", label: "Projetos", path: "/projetos", icon: "folder" },
   { id: "tasks", label: "Tarefas", path: "/tarefas", icon: "task_alt" },
+  { id: "processCenter", label: "Central de Processos", path: "/processos", icon: "inventory_2" },
   { id: "meetings", label: "Reuniões", path: "/reunioes", icon: "groups" },
   { id: "pedagogico", label: "Pedagógico", path: "/pedagogico", icon: "school", group: "Setores" },
   { id: "comercial", label: "Comercial", path: "/comercial", icon: "handshake" },

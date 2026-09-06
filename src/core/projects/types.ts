@@ -8,11 +8,52 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   cancelled: "Cancelado",
 };
 
+export interface KeyDate {
+  id: string;
+  label: string;
+  date: string;
+}
+
 export interface Briefing {
   content: string;
-  keyDates: { label: string; date: string }[];
+  keyDates: KeyDate[];
   updatedAt: string | null;
   updatedBy: string | null;
+}
+
+// Detalhes do curso/edital do projeto — o "documento único" que centraliza
+// as informações que todos os setores consultam (pedagógico, comercial,
+// marketing, CS…). Espelha defaultCourse()/EDITAL_FIELDS do app original.
+export interface Course {
+  orgaoEstado: string;
+  cargoCarreira: string;
+  vagas: string;
+  remuneracao: string;
+  banca: string;
+  linkConcurso: string;
+  analiseEdital: string;
+  disciplinas: string;
+  observacoes: string;
+  coordenador: string;
+  modalidades: string;
+  inicioVendas: string;
+  tempoAcesso: string;
+  tipoCronograma: string;
+  duracaoSemanas: string;
+  preco: string;
+  parcelamento: string;
+  condicoesComercialCs: string;
+}
+
+export const emptyCourse: Course = {
+  orgaoEstado: "", cargoCarreira: "", vagas: "", remuneracao: "", banca: "", linkConcurso: "",
+  analiseEdital: "", disciplinas: "", observacoes: "", coordenador: "", modalidades: "",
+  inicioVendas: "", tempoAcesso: "", tipoCronograma: "", duracaoSemanas: "", preco: "",
+  parcelamento: "", condicoesComercialCs: "",
+};
+
+export function courseHasData(course: Course): boolean {
+  return Object.values(course).some((v) => v.trim());
 }
 
 export interface Project {
@@ -28,6 +69,7 @@ export interface Project {
   priority: "high" | "medium" | "low";
   status: ProjectStatus;
   briefing: Briefing;
+  course: Course;
 }
 
 export const PROGRAM_COLORS = [

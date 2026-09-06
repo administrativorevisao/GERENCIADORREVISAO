@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useCompany } from "../../core/companies/CompanyContext";
 import { useAuth } from "../auth/AuthContext";
 import { canView, isAdmin } from "../auth/types";
+import { BrandLogo } from "../ui/BrandLogo";
 import { NAV } from "./nav";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -15,7 +16,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       <div className={`scrim ${open ? "show" : ""}`} onClick={onClose} />
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="brand">
-          <div className="brand-logo">{company.initials}</div>
+          <BrandLogo company={company} />
           <div className="brand-txt">
             <b>{company.name}OS</b>
             <span>{company.sub}</span>

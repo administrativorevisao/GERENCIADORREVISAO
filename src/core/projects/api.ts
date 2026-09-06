@@ -1,5 +1,5 @@
 import { createRow, listRows, newId, updateRow } from "../../shared/lib/jsonStore";
-import type { Briefing, Program, Project } from "./types";
+import { emptyCourse, type Briefing, type Program, type Project } from "./types";
 import { todayISO } from "../../shared/lib/dates";
 
 const PROJECTS_TABLE = "projects";
@@ -44,6 +44,7 @@ export function createProject(companyId: string, input: Partial<Project>) {
     priority: "medium",
     status: "active",
     briefing: emptyBriefing,
+    course: emptyCourse,
     ...input,
   };
   return createRow(PROJECTS_TABLE, companyId, project);
