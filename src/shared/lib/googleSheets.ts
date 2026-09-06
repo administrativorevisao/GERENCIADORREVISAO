@@ -12,6 +12,8 @@
 // for escolhido — não à conta inteira.
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.file";
 
+export type DrivePickerKind = "spreadsheets" | "documents";
+
 declare global {
   interface Window {
     google?: {
@@ -26,7 +28,7 @@ declare global {
       };
       picker?: {
         Action: { PICKED: string; CANCEL: string };
-        ViewId: { SPREADSHEETS: string };
+        ViewId: { SPREADSHEETS: string; DOCUMENTS: string };
         DocsView: new (viewId: string) => PickerDocsView;
         PickerBuilder: new () => PickerBuilder;
       };
@@ -83,26 +85,30 @@ function ensureGooglePickerLib(): Promise<void> {
   });
 }
 
-// Abre o seletor visual do Google Drive filtrado por planilhas. Retorna o
-// arquivo escolhido (ou null se o usuário cancelar).
+// Abre o seletor visual do Google Drive filtrado por planilhas ou por
+// documentos de texto. Retorna o arquivo escolhido (ou null se o usuário
+// cancelar).
 export async function openDrivePicker(
   apiKey: string,
   accessToken: string,
+  kind: DrivePickerKind = "spreadsheets",
 ): Promise<{ id: string; name: string; url: string } | null> {
   if (!apiKey) throw new Error("Configure a Chave de API do Google em Administração antes de usar o seletor do Drive.");
   await ensureGooglePickerLib();
+  const viewId = kind === "documents" ? window.google!.picker!.ViewId.DOCUMENTS : window.google!.picker!.ViewId.SPREADSHEETS;
+  const defaultUrlPrefix = kind === "documents" ? "https://docs.google.com/document/d/" : "https://docs.google.com/spreadsheets/d/";
   return new Promise((resolve, reject) => {
     try {
-      const view = new window.google!.picker!.DocsView(window.google!.picker!.ViewId.SPREADSHEETS).setIncludeFolders(true);
+      const view = new window.google!.picker!.DocsView(viewId).setIncludeFolders(true);
       const picker = new window.google!.picker!.PickerBuilder()
         .addView(view)
         .setOAuthToken(accessToken)
         .setDeveloperKey(apiKey)
-        .setTitle("Escolha a planilha no Google Drive")
+        .setTitle(kind === "documents" ? "Escolha o documento no Google Drive" : "Escolha a planilha no Google Drive")
         .setCallback((data: PickerResponse) => {
           if (data.action === window.google!.picker!.Action.PICKED) {
             const doc = data.docs?.[0];
-            if (doc) resolve({ id: doc.id, name: doc.name, url: doc.url ?? `https://docs.google.com/spreadsheets/d/${doc.id}` });
+            if (doc) resolve({ id: doc.id, name: doc.name, url: doc.url ?? `${defaultUrlPrefix}${doc.id}` });
             else resolve(null);
           } else if (data.action === window.google!.picker!.Action.CANCEL) {
             resolve(null);
@@ -199,11 +205,30 @@ export async function fetchGoogleSheetRowsMulti(clientId: string, sheetId: strin
   return rows;
 }
 
+// Baixa o texto simples de um Google Doc via exportação do Drive (não
+// precisa da Google Docs API — a Drive API, já ativada, exporta qualquer
+// Doc como texto puro).
+export async function fetchGoogleDocText(clientId: string, fileId: string): Promise<string> {
+  const token = await getGoogleAccessToken(clientId);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Google Drive (${res.status}): ${body.slice(0, 200)}`);
+  }
+  return res.text();
+}
+
 export const MONTH_TABS_PT = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
-export function extractSheetId(urlOrId: string): string | null {
+// Extrai o ID de um arquivo do Drive a partir da URL (planilha, documento
+// ou qualquer outro tipo) ou aceita o ID já "puro".
+export function extractDriveFileId(urlOrId: string): string | null {
   const s = String(urlOrId || "").trim();
-  const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  const m = s.match(/\/(?:spreadsheets|document|file)\/d\/([a-zA-Z0-9-_]+)/);
   if (m) return m[1];
   return /^[a-zA-Z0-9-_]{20,}$/.test(s) ? s : null;
 }
+
+export const extractSheetId = extractDriveFileId;

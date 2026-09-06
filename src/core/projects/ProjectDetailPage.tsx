@@ -9,6 +9,7 @@ import { COURSE_TYPE_LABEL, GUIA_TEMPLATES, type CourseType, type GuiaContent, t
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { STATUS_LABEL } from "../tasks/types";
 import { dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
+import { useGoogleImport } from "../../shared/lib/useGoogleImport";
 
 type Tab = "briefing" | "edital" | "course" | "guias" | "dates" | "links" | "tasks";
 const TABS: { id: Tab; label: string }[] = [
@@ -84,7 +85,10 @@ export function ProjectDetailPage() {
 function BriefingTab({ project }: { project: Project }) {
   const { profile } = useAuth();
   const updateProject = useUpdateProject();
+  const { pickDocument, docTextFromId, extractFileId } = useGoogleImport();
   const [draft, setDraft] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const text = draft ?? project.briefing.content;
   const changed = draft !== null && draft !== project.briefing.content;
 
@@ -96,12 +100,34 @@ function BriefingTab({ project }: { project: Project }) {
     setDraft(null);
   }
 
+  async function importFromDoc() {
+    setImportError(null);
+    setImporting(true);
+    try {
+      const picked = await pickDocument();
+      if (!picked) return;
+      const fileId = extractFileId(picked.url) ?? picked.id;
+      const docText = await docTextFromId(fileId);
+      setDraft(docText);
+    } catch (e) {
+      setImportError((e as Error).message || "Não foi possível importar o documento.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div>
       <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
         Documento central deste curso/projeto — contexto, objetivos e o que cada setor precisa saber. As datas
         que orientam todos os setores ficam na aba <b>Datas-chave</b>, e os dados do edital/curso na aba <b>Curso / Edital</b>.
       </p>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <button className="btn sm ghost" onClick={importFromDoc} disabled={importing}>
+          <span className="msi">folder_open</span> {importing ? "Abrindo o Drive…" : "Importar do Google Doc"}
+        </button>
+      </div>
+      {importError && <p className="hint" style={{ color: "var(--danger, #d33)" }}>{importError}</p>}
       <textarea
         className="input"
         style={{ minHeight: 220 }}

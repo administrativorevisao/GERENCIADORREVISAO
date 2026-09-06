@@ -6,6 +6,8 @@ import { useTasks } from "../tasks/useTasks";
 import { usePrograms, useProjects } from "./useProjects";
 import { ProgramModal } from "./ProgramModal";
 import { ProjectModal } from "./ProjectModal";
+import { ProjectImportModal } from "./ProjectImportModal";
+import { downloadProjectTemplate } from "./projectTemplate";
 import type { Program, Project } from "./types";
 
 function programProgress(program: Program, projects: Project[], tasks: { status: string; projectId: string | null }[]) {
@@ -20,10 +22,11 @@ function programProgress(program: Program, projects: Project[], tasks: { status:
 export function ProjectsPage() {
   const { profile } = useAuth();
   const { data: programs, isLoading: loadingPrograms } = usePrograms();
-  const { data: projects, isLoading: loadingProjects } = useProjects();
+  const { data: projects, isLoading: loadingProjects, refetch: refetchProjects } = useProjects();
   const { data: tasks } = useTasks();
   const [newProgram, setNewProgram] = useState(false);
   const [newProjectIn, setNewProjectIn] = useState<Program | null>(null);
+  const [importing, setImporting] = useState(false);
 
   if (loadingPrograms || loadingProjects) return <div className="empty">Carregando projetos…</div>;
 
@@ -41,6 +44,10 @@ export function ProjectsPage() {
         <span style={{ flex: 1 }} />
         {admin && (
           <>
+            <button className="btn sm ghost" onClick={downloadProjectTemplate}>Modelo</button>
+            <button className="btn sm" onClick={() => setImporting(true)}>
+              <span className="msi">folder_open</span> Importar do Drive
+            </button>
             <button className="btn sm" onClick={() => setNewProgram(true)}>+ Novo programa</button>
             <button className="btn primary sm" onClick={() => setNewProjectIn({} as Program)}>+ Novo projeto</button>
           </>
@@ -96,6 +103,14 @@ export function ProjectsPage() {
         <ProjectModal
           program={newProjectIn.id ? newProjectIn : undefined}
           onClose={() => setNewProjectIn(null)}
+        />
+      )}
+      {importing && (
+        <ProjectImportModal
+          projects={projs}
+          programs={progs}
+          onClose={() => setImporting(false)}
+          onDone={() => refetchProjects()}
         />
       )}
     </div>
