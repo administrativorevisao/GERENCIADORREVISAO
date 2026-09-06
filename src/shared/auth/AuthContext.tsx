@@ -11,6 +11,7 @@ interface AuthContextValue {
   error: string | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  updateOwnProfile: (patch: Partial<Profile>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -32,6 +33,7 @@ function rowToProfile(id: string, data: Record<string, unknown>): Profile {
     avatarImage: (data.avatarImage as string) ?? null,
     allowedViews: (data.allowedViews as string[]) ?? null,
     financeAccess: Boolean(data.financeAccess),
+    birthDate: (data.birthDate as string) ?? null,
   };
 }
 
@@ -101,8 +103,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }
 
+  async function updateOwnProfile(patch: Partial<Profile>) {
+    if (!supabase || !profile) return;
+    const { data: row, error: fetchErr } = await supabase.from("users").select("data").eq("id", profile.id).single();
+    if (fetchErr || !row) return;
+    const merged = { ...(row.data as Record<string, unknown>), ...patch };
+    const { error: updateErr } = await supabase.from("users").update({ data: merged }).eq("id", profile.id);
+    if (!updateErr) setProfile(rowToProfile(profile.id, merged));
+  }
+
   return (
-    <AuthContext.Provider value={{ session, profile, loading, error, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, error, signIn, signOut, updateOwnProfile }}>
       {children}
     </AuthContext.Provider>
   );

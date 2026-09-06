@@ -24,6 +24,8 @@ create table if not exists public.notifications      (id text primary key, data 
 create table if not exists public.link_templates      (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.meetings            (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.editais             (id text primary key, data jsonb not null, updated_at timestamptz default now());
+create table if not exists public.calendars           (id text primary key, data jsonb not null, updated_at timestamptz default now());
+create table if not exists public.calendar_events     (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_transactions        (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_accounts            (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_invoices            (id text primary key, data jsonb not null, updated_at timestamptz default now());
@@ -41,7 +43,7 @@ begin
   foreach t in array array[
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
-    'meetings','editais','finance_transactions','finance_accounts','finance_invoices',
+    'meetings','editais','calendars','calendar_events','finance_transactions','finance_accounts','finance_invoices',
     'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links'
   ]
   loop
@@ -102,7 +104,7 @@ begin
   foreach t in array array[
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
-    'meetings','editais','finance_transactions','finance_accounts','finance_invoices',
+    'meetings','editais','calendars','calendar_events','finance_transactions','finance_accounts','finance_invoices',
     'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links'
   ]
   loop
@@ -115,7 +117,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['departments','teams','users','programs','task_templates','recurring_activities','weekly_objectives','link_templates','editais']
+  foreach t in array array['departments','teams','users','programs','task_templates','recurring_activities','weekly_objectives','link_templates','editais','calendars','calendar_events']
   loop
     execute format('drop policy if exists %I_read on public.%I;', t, t);
     execute format('create policy %I_read on public.%I for select to authenticated using (company_id = public.app_company_id());', t, t);

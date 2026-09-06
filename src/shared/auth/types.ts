@@ -14,6 +14,7 @@ export interface Profile {
   avatarImage: string | null;
   allowedViews: string[] | null; // null = acesso padrão total (exceto financeiro)
   financeAccess: boolean;
+  birthDate: string | null; // "YYYY-MM-DD" — usado pelo calendário de aniversários (só mês/dia)
 }
 
 export function isAdmin(profile: Profile | null): boolean {
