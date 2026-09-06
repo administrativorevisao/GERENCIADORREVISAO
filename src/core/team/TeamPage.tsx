@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { isAdmin } from "../../shared/auth/types";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
+import { useAssignRole, useRoles } from "./roles";
 import { downloadTeamTemplate } from "./teamTemplate";
 import { TeamImportModal } from "./TeamImportModal";
+import type { TeamUser } from "./types";
 import { useUsers } from "./useUsers";
 
 function departmentName(id: string | null): string {
@@ -14,8 +16,15 @@ function departmentName(id: string | null): string {
 export function TeamPage() {
   const { profile } = useAuth();
   const { data: users, isLoading, refetch } = useUsers();
+  const { data: roles } = useRoles();
+  const assignRole = useAssignRole();
   const [importing, setImporting] = useState(false);
   const admin = isAdmin(profile);
+
+  function handleAssignRole(user: TeamUser, roleId: string) {
+    const role = (roles ?? []).find((r) => r.id === roleId) ?? null;
+    assignRole.mutate({ user, role });
+  }
 
   if (isLoading) return <div className="empty">Carregando equipe…</div>;
 
@@ -50,6 +59,7 @@ export function TeamPage() {
                 <th>Cargo</th>
                 <th>Setor</th>
                 <th>Papel</th>
+                <th>Perfil de acesso</th>
               </tr>
             </thead>
             <tbody>
@@ -60,6 +70,21 @@ export function TeamPage() {
                   <td>{u.jobTitle || "—"}</td>
                   <td>{departmentName(u.departmentId)}</td>
                   <td>{u.role === "admin" ? "Admin" : "Colaborador"}</td>
+                  <td>
+                    {admin ? (
+                      <select
+                        className="input" style={{ padding: "4px 8px", fontSize: 12.5 }}
+                        value={u.roleId ?? ""} onChange={(e) => handleAssignRole(u, e.target.value)}
+                      >
+                        <option value="">— Nenhum —</option>
+                        {(roles ?? []).map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      (roles ?? []).find((r) => r.id === u.roleId)?.name ?? "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

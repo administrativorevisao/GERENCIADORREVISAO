@@ -2,8 +2,24 @@ import { useEffect, useState } from "react";
 import { useCompany } from "../../core/companies/CompanyContext";
 import { useCompanySettings, useUpdateCompanySettings } from "../../core/companies/companySettings";
 import { useAppSettings, useUpdateAppSettings } from "../../core/companies/appSettings";
+import { useDeleteRole, useRoles, useSaveRole, type Role } from "../../core/team/roles";
+import { useUsers } from "../../core/team/useUsers";
+import { RoleModal } from "../../core/team/RoleModal";
+import type { TeamUser } from "../../core/team/types";
 import { pickFile, resizeImageToDataURL } from "../lib/imageUpload";
 import { BrandLogo } from "../ui/BrandLogo";
+
+const SUGGESTED_ROLES: Array<Pick<Role, "name" | "isAdmin" | "financeAccess" | "allowedViews">> = [
+  { name: "Financeiro", isAdmin: false, financeAccess: true, allowedViews: null },
+  { name: "Colaboradores", isAdmin: false, financeAccess: false, allowedViews: null },
+  { name: "Gestor de Projetos", isAdmin: false, financeAccess: false, allowedViews: null },
+  { name: "Head", isAdmin: false, financeAccess: false, allowedViews: null },
+  { name: "Administrativo", isAdmin: false, financeAccess: false, allowedViews: null },
+];
+
+function roleUsersCount(role: Role, users: TeamUser[]) {
+  return users.filter((u) => u.roleId === role.id).length;
+}
 
 export function AdminPage() {
   const { company } = useCompany();
@@ -15,6 +31,12 @@ export function AdminPage() {
   const [clientId, setClientId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [savedClientId, setSavedClientId] = useState(false);
+  const { data: roles } = useRoles();
+  const { data: users } = useUsers();
+  const saveRole = useSaveRole();
+  const deleteRole = useDeleteRole();
+  const [editingRole, setEditingRole] = useState<Role | null | "new">(null);
+  const [seeding, setSeeding] = useState(false);
 
   async function handleUpload() {
     const file = await pickFile("image/jpeg,image/png,image/jpg");
@@ -50,6 +72,18 @@ export function AdminPage() {
     await updateAppSettings.mutateAsync({ googleClientId: clientId.trim(), googleApiKey: apiKey.trim() });
     setSavedClientId(true);
     setTimeout(() => setSavedClientId(false), 2000);
+  }
+
+  async function seedSuggestedRoles() {
+    setSeeding(true);
+    try {
+      for (const preset of SUGGESTED_ROLES) {
+        if ((roles ?? []).some((r) => r.name.toLowerCase() === preset.name.toLowerCase())) continue;
+        await saveRole.mutateAsync({ role: preset, users: users ?? [] });
+      }
+    } finally {
+      setSeeding(false);
+    }
   }
 
   return (
@@ -108,6 +142,71 @@ export function AdminPage() {
           projeto do Google Cloud.
         </p>
       </div>
+
+      <div className="card card-pad" style={{ gridColumn: "1 / -1" }}>
+        <div className="row" style={{ alignItems: "center" }}>
+          <div className="section-title" style={{ margin: 0 }}><span className="msi">badge</span> Perfis de acesso</div>
+          <span style={{ flex: 1 }} />
+          {(roles ?? []).length === 0 && (
+            <button className="btn sm ghost" onClick={seedSuggestedRoles} disabled={seeding}>
+              {seeding ? "Criando…" : "Criar modelos sugeridos"}
+            </button>
+          )}
+          <button className="btn sm primary" onClick={() => setEditingRole("new")}>+ Novo perfil</button>
+        </div>
+        <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+          Defina livremente os "modelos de usuário" da empresa (ex: Financeiro, Colaboradores, Gestor de Projetos,
+          Head, Administrativo) e o que cada um pode ver e editar. Depois, atribua um perfil a cada colaborador na
+          tela <b>Equipe</b> — as permissões se aplicam na hora.
+        </p>
+
+        {(roles ?? []).length === 0 ? (
+          <div className="hint" style={{ marginTop: 10 }}>Nenhum perfil criado ainda.</div>
+        ) : (
+          <div className="tbl-wrap" style={{ marginTop: 10 }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Admin</th>
+                  <th>Financeiro</th>
+                  <th>Visualizações</th>
+                  <th>Em uso</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(roles ?? []).map((role) => (
+                  <tr key={role.id}>
+                    <td><b>{role.name}</b></td>
+                    <td>{role.isAdmin ? "Sim" : "—"}</td>
+                    <td>{role.isAdmin || role.financeAccess ? "Sim" : "—"}</td>
+                    <td>{role.isAdmin || role.allowedViews === null ? "Todas" : `${role.allowedViews.length} tela(s)`}</td>
+                    <td>{roleUsersCount(role, users ?? [])}</td>
+                    <td>
+                      <div className="row" style={{ gap: 6 }}>
+                        <button className="btn sm ghost" onClick={() => setEditingRole(role)}>Editar</button>
+                        <button
+                          className="btn sm danger"
+                          onClick={() => deleteRole.mutate(role.id)}
+                          disabled={roleUsersCount(role, users ?? []) > 0}
+                          title={roleUsersCount(role, users ?? []) > 0 ? "Reatribua os colaboradores a outro perfil antes de excluir" : undefined}
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {editingRole && (
+        <RoleModal role={editingRole === "new" ? null : editingRole} onClose={() => setEditingRole(null)} />
+      )}
     </div>
   );
 }

@@ -14,6 +14,9 @@ export function createUser(companyId: string, input: Partial<TeamUser>) {
     departmentId: null,
     teamId: null,
     birthDate: null,
+    roleId: null,
+    allowedViews: null,
+    financeAccess: false,
     ...input,
   };
   return createRow(USERS_TABLE, companyId, user);

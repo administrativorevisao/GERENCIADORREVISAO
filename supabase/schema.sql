@@ -34,6 +34,10 @@ create table if not exists public.finance_payroll             (id text primary k
 create table if not exists public.finance_contractor_invoices (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_goals               (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_sheet_links         (id text primary key, data jsonb not null, updated_at timestamptz default now());
+-- Perfis de acesso ("modelos de usuário") definidos livremente em
+-- Administração — cada um empacota isAdmin/financeAccess/allowedViews,
+-- aplicados ao colaborador que o tiver atribuído (users.roleId).
+create table if not exists public.roles                       (id text primary key, data jsonb not null, updated_at timestamptz default now());
 -- app_settings NÃO é multiempresa (sem company_id) — é config do app inteiro
 -- (ex: Client ID OAuth do Google, compartilhado por todas as empresas porque
 -- é uma única origem/deploy). Uma linha só, id='global'.
@@ -54,7 +58,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles'
   ]
   loop
     execute format('alter table public.%I add column if not exists company_id text;', t);
@@ -115,7 +119,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles'
   ]
   loop
     execute format('alter table public.%I enable row level security;', t);
@@ -127,7 +131,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['departments','teams','users','programs','task_templates','recurring_activities','weekly_objectives','link_templates','editais','calendars','calendar_events','company_settings']
+  foreach t in array array['departments','teams','users','programs','task_templates','recurring_activities','weekly_objectives','link_templates','editais','calendars','calendar_events','company_settings','roles']
   loop
     execute format('drop policy if exists %I_read on public.%I;', t, t);
     execute format('create policy %I_read on public.%I for select to authenticated using (company_id = public.app_company_id());', t, t);
