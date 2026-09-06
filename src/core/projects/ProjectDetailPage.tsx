@@ -10,10 +10,11 @@ import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { STATUS_LABEL } from "../tasks/types";
 import { dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
 
-type Tab = "briefing" | "course" | "guias" | "dates" | "links" | "tasks";
+type Tab = "briefing" | "edital" | "course" | "guias" | "dates" | "links" | "tasks";
 const TABS: { id: Tab; label: string }[] = [
   { id: "briefing", label: "Briefing" },
-  { id: "course", label: "Curso / Edital" },
+  { id: "edital", label: "Edital" },
+  { id: "course", label: "Curso" },
   { id: "guias", label: "Guias por setor" },
   { id: "dates", label: "Datas-chave" },
   { id: "links", label: "Links" },
@@ -61,7 +62,8 @@ export function ProjectDetailPage() {
             ))}
           </div>
           {tab === "briefing" && <BriefingTab project={project} />}
-          {tab === "course" && <CourseTab project={project} />}
+          {tab === "edital" && <CourseTab project={project} groupKey="edital" />}
+          {tab === "course" && <CourseTab project={project} groupKey="course" />}
           {tab === "guias" && <GuiasTab project={project} />}
           {tab === "dates" && <KeyDatesTab project={project} />}
           {tab === "links" && <LinksTab project={project} />}
@@ -119,9 +121,10 @@ function BriefingTab({ project }: { project: Project }) {
   );
 }
 
-const COURSE_FIELD_GROUPS: { title: string; fields: { key: keyof Course; label: string }[] }[] = [
-  {
+const COURSE_FIELD_GROUPS: Record<"edital" | "course", { title: string; intro: string; fields: { key: keyof Course; label: string }[] }> = {
+  edital: {
     title: "Edital",
+    intro: "Informações gerais do edital — a fonte única para todos os setores não ficarem se perguntando.",
     fields: [
       { key: "orgaoEstado", label: "Órgão / Estado" },
       { key: "cargoCarreira", label: "Cargo / Carreira" },
@@ -134,8 +137,9 @@ const COURSE_FIELD_GROUPS: { title: string; fields: { key: keyof Course; label: 
       { key: "observacoes", label: "Observações" },
     ],
   },
-  {
-    title: "Curso (comercial / operacional)",
+  course: {
+    title: "Curso",
+    intro: "Dados comerciais/operacionais do curso — coordenação, cronograma, preço, condições.",
     fields: [
       { key: "coordenador", label: "Coordenador(a)" },
       { key: "modalidades", label: "Modalidades" },
@@ -148,14 +152,15 @@ const COURSE_FIELD_GROUPS: { title: string; fields: { key: keyof Course; label: 
       { key: "condicoesComercialCs", label: "Condições comercial/CS" },
     ],
   },
-];
+};
 const LONG_FIELDS = new Set<keyof Course>(["analiseEdital", "observacoes", "disciplinas"]);
 
-function CourseTab({ project }: { project: Project }) {
+function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital" | "course" }) {
   const updateProject = useUpdateProject();
   const [draft, setDraft] = useState<Course | null>(null);
   const course = draft ?? project.course ?? emptyCourse;
   const changed = draft !== null;
+  const group = COURSE_FIELD_GROUPS[groupKey];
 
   function setField(key: keyof Course, value: string) {
     setDraft({ ...course, [key]: value });
@@ -168,29 +173,21 @@ function CourseTab({ project }: { project: Project }) {
 
   return (
     <div>
-      <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
-        Dados do edital/curso — a fonte única para pedagógico, comercial, marketing e CS não ficarem perguntando
-        um pro outro.
-      </p>
-      {COURSE_FIELD_GROUPS.map((group) => (
-        <div key={group.title} style={{ marginBottom: 18 }}>
-          <div className="section-title" style={{ fontSize: 13 }}>{group.title}</div>
-          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-            {group.fields.map((f) => (
-              <div className="field" key={f.key} style={{ margin: 0 }}>
-                <label htmlFor={`course-${f.key}`}>{f.label}</label>
-                {LONG_FIELDS.has(f.key) ? (
-                  <textarea id={`course-${f.key}`} className="input" value={course[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
-                ) : (
-                  <input id={`course-${f.key}`} className="input" value={course[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
-                )}
-              </div>
-            ))}
+      <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>{group.intro}</p>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+        {group.fields.map((f) => (
+          <div className="field" key={f.key} style={{ margin: 0 }}>
+            <label htmlFor={`course-${f.key}`}>{f.label}</label>
+            {LONG_FIELDS.has(f.key) ? (
+              <textarea id={`course-${f.key}`} className="input" value={course[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
+            ) : (
+              <input id={`course-${f.key}`} className="input" value={course[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
+            )}
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
       {changed && (
-        <button className="btn primary sm" onClick={save} disabled={updateProject.isPending}>
+        <button className="btn primary sm" style={{ marginTop: 14 }} onClick={save} disabled={updateProject.isPending}>
           {updateProject.isPending ? "Salvando…" : "Salvar dados do curso"}
         </button>
       )}
