@@ -1,17 +1,46 @@
 import { useState } from "react";
-import { extractSheetId, MONTH_TABS_PT } from "../../shared/lib/googleSheets";
+import { extractSheetId, getGoogleAccessToken, MONTH_TABS_PT, openDrivePicker } from "../../shared/lib/googleSheets";
+import { useAppSettings } from "../../core/companies/appSettings";
 import { useSaveSheetLink } from "./sheetLinks";
 import type { SheetLink } from "./sheetLinks";
 import type { FinViewId } from "./types";
 
 export function SheetLinkModal({ view, link, onClose }: { view: FinViewId; link: SheetLink | null; onClose: () => void }) {
   const saveSheetLink = useSaveSheetLink();
+  const { data: settings } = useAppSettings();
   const [url, setUrl] = useState(link?.sheetUrl ?? "");
+  const [pickedName, setPickedName] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [tabMode, setTabMode] = useState<"first" | "months" | "custom">(
     link?.tabs && link.tabs.join(",") === MONTH_TABS_PT.join(",") ? "months" : link?.tabs?.length ? "custom" : "first",
   );
   const [customTabs, setCustomTabs] = useState(tabMode === "custom" ? (link?.tabs ?? []).join(", ") : "");
   const [error, setError] = useState<string | null>(null);
+
+  async function handlePickFromDrive() {
+    setError(null);
+    if (!settings?.googleClientId) {
+      setError("Configure o Client ID do Google em Administração antes de usar o seletor do Drive.");
+      return;
+    }
+    if (!settings?.googleApiKey) {
+      setError("Configure a Chave de API do Google em Administração antes de usar o seletor do Drive.");
+      return;
+    }
+    setPicking(true);
+    try {
+      const token = await getGoogleAccessToken(settings.googleClientId);
+      const picked = await openDrivePicker(settings.googleApiKey, token);
+      if (picked) {
+        setUrl(picked.url);
+        setPickedName(picked.name);
+      }
+    } catch (e) {
+      setError((e as Error).message || "Não foi possível abrir o seletor do Drive.");
+    } finally {
+      setPicking(false);
+    }
+  }
 
   async function handleSave() {
     const sheetId = extractSheetId(url.trim());
@@ -32,10 +61,17 @@ export function SheetLinkModal({ view, link, onClose }: { view: FinViewId; link:
         <div className="modal-head"><h3>{link ? "Trocar planilha vinculada" : "Vincular planilha do Drive"}</h3></div>
         <div className="modal-body">
           <div className="field">
-            <label htmlFor="sheet-url">URL da planilha (Google Sheets)</label>
+            <label>Planilha</label>
+            <button className="btn" onClick={handlePickFromDrive} disabled={picking} style={{ width: "100%", justifyContent: "center" }}>
+              <span className="msi">folder_open</span> {picking ? "Abrindo o Drive…" : "Escolher do Google Drive"}
+            </button>
+            {pickedName && <p className="hint" style={{ marginTop: 6 }}>Selecionada: <strong>{pickedName}</strong></p>}
+          </div>
+          <div className="field">
+            <label htmlFor="sheet-url">ou cole a URL da planilha (Google Sheets)</label>
             <input
-              id="sheet-url" className="input" autoFocus placeholder="https://docs.google.com/spreadsheets/d/..."
-              value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }}
+              id="sheet-url" className="input" placeholder="https://docs.google.com/spreadsheets/d/..."
+              value={url} onChange={(e) => { setUrl(e.target.value); setPickedName(null); setError(null); }}
             />
           </div>
           <div className="field">

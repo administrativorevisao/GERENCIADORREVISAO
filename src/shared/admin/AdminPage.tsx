@@ -13,6 +13,7 @@ export function AdminPage() {
   const { data: appSettings } = useAppSettings();
   const updateAppSettings = useUpdateAppSettings();
   const [clientId, setClientId] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [savedClientId, setSavedClientId] = useState(false);
 
   async function handleUpload() {
@@ -39,11 +40,14 @@ export function AdminPage() {
   }
 
   useEffect(() => {
-    if (appSettings) setClientId(appSettings.googleClientId);
+    if (appSettings) {
+      setClientId(appSettings.googleClientId);
+      setApiKey(appSettings.googleApiKey);
+    }
   }, [appSettings]);
 
   async function saveClientId() {
-    await updateAppSettings.mutateAsync({ googleClientId: clientId.trim() });
+    await updateAppSettings.mutateAsync({ googleClientId: clientId.trim(), googleApiKey: apiKey.trim() });
     setSavedClientId(true);
     setTimeout(() => setSavedClientId(false), 2000);
   }
@@ -76,24 +80,32 @@ export function AdminPage() {
       <div className="card card-pad">
         <div className="section-title"><span className="msi">sync</span> Sincronização com Google Sheets</div>
         <p className="muted" style={{ fontSize: 12.5 }}>
-          Client ID OAuth do Google (mesmo para todas as empresas, um só cadastro no Google Cloud). Necessário para
-          que o módulo Financeiro consiga ler as planilhas vinculadas em cada aba.
+          Client ID e Chave de API do Google (mesmos para todas as empresas, um só cadastro no Google Cloud).
+          Necessários para que o módulo Financeiro consiga escolher planilhas direto do Drive e ler os dados
+          vinculados em cada aba.
         </p>
-        <div className="row" style={{ gap: 8, margin: "10px 0" }}>
+        <div className="field" style={{ margin: "10px 0" }}>
+          <label htmlFor="google-client-id">Client ID OAuth</label>
           <input
-            className="input"
-            style={{ flex: 1 }}
-            placeholder="xxxxxxxxxx.apps.googleusercontent.com"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
+            id="google-client-id" className="input" placeholder="xxxxxxxxxx.apps.googleusercontent.com"
+            value={clientId} onChange={(e) => setClientId(e.target.value)}
           />
-          <button className="btn sm primary" onClick={saveClientId} disabled={updateAppSettings.isPending}>
-            {savedClientId ? "Salvo ✓" : "Salvar"}
-          </button>
         </div>
-        <p className="hint">
-          Crie o Client ID em console.cloud.google.com (OAuth 2.0 do tipo "Aplicativo da Web"), autorizando a origem
-          deste site, com a API do Google Sheets ativada.
+        <div className="field" style={{ margin: "10px 0" }}>
+          <label htmlFor="google-api-key">Chave de API (seletor do Drive)</label>
+          <input
+            id="google-api-key" className="input" placeholder="AIzaSy..."
+            value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+          />
+        </div>
+        <button className="btn sm primary" onClick={saveClientId} disabled={updateAppSettings.isPending}>
+          {savedClientId ? "Salvo ✓" : "Salvar"}
+        </button>
+        <p className="hint" style={{ marginTop: 10 }}>
+          Crie as duas credenciais em console.cloud.google.com: o Client ID como OAuth 2.0 do tipo "Aplicativo da
+          Web" (autorizando a origem deste site) e a Chave de API em "Credenciais → Criar credenciais → Chave de
+          API" (restrinja-a à Google Sheets API, Google Drive API e Google Picker API). Ative as três APIs no
+          projeto do Google Cloud.
         </p>
       </div>
     </div>

@@ -1,9 +1,16 @@
 // Sincronização com Google Sheets (Drive) — OAuth no navegador via Google
-// Identity Services (sem backend) + a API REST do Sheets, só leitura.
-// Exige um Client ID OAuth configurado em Administração. Só funciona
-// servido por http/https (não em file://) — o Google exige uma origem
-// autorizada.
-const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+// Identity Services (sem backend) + a API REST do Sheets, só leitura, mais
+// o Google Picker para escolher a planilha direto do Drive da empresa (em
+// vez de colar a URL manualmente). Exige um Client ID OAuth (e, para o
+// seletor do Drive, também uma Chave de API) configurados em Administração.
+// Só funciona servido por http/https (não em file://) — o Google exige uma
+// origem autorizada.
+//
+// Escopo "drive.file" (não o "drive.readonly" completo): o Picker é uma UI
+// hospedada pelo próprio Google, então o usuário pode navegar em todo o
+// Drive dele através dela; o app só recebe acesso ao arquivo específico que
+// for escolhido — não à conta inteira.
+const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.file";
 
 declare global {
   interface Window {
@@ -17,8 +24,35 @@ declare global {
           }): { requestAccessToken: (opts: { prompt: string }) => void };
         };
       };
+      picker?: {
+        Action: { PICKED: string; CANCEL: string };
+        ViewId: { SPREADSHEETS: string };
+        DocsView: new (viewId: string) => PickerDocsView;
+        PickerBuilder: new () => PickerBuilder;
+      };
     };
+    gapi?: { load: (mod: string, cb: () => void) => void };
   }
+}
+
+interface PickerResponse {
+  action: string;
+  docs?: { id: string; name: string; url?: string }[];
+}
+
+interface PickerDocsView {
+  setIncludeFolders: (v: boolean) => PickerDocsView;
+  setMimeTypes: (v: string) => PickerDocsView;
+  setSelectFolderEnabled: (v: boolean) => PickerDocsView;
+}
+
+interface PickerBuilder {
+  addView: (view: PickerDocsView) => PickerBuilder;
+  setOAuthToken: (token: string) => PickerBuilder;
+  setDeveloperKey: (key: string) => PickerBuilder;
+  setCallback: (cb: (data: PickerResponse) => void) => PickerBuilder;
+  setTitle: (title: string) => PickerBuilder;
+  build: () => { setVisible: (v: boolean) => void };
 }
 
 export type SheetRow = Record<string, string>;
@@ -34,9 +68,57 @@ function ensureGoogleIdentityLib(): Promise<void> {
   });
 }
 
+function ensureGooglePickerLib(): Promise<void> {
+  if (window.google?.picker) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const afterApiLoaded = () => {
+      window.gapi!.load("picker", () => resolve());
+    };
+    if (window.gapi) { afterApiLoaded(); return; }
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.onload = afterApiLoaded;
+    script.onerror = () => reject(new Error("Falha ao carregar o seletor de arquivos do Google (sem internet?)."));
+    document.head.appendChild(script);
+  });
+}
+
+// Abre o seletor visual do Google Drive filtrado por planilhas. Retorna o
+// arquivo escolhido (ou null se o usuário cancelar).
+export async function openDrivePicker(
+  apiKey: string,
+  accessToken: string,
+): Promise<{ id: string; name: string; url: string } | null> {
+  if (!apiKey) throw new Error("Configure a Chave de API do Google em Administração antes de usar o seletor do Drive.");
+  await ensureGooglePickerLib();
+  return new Promise((resolve, reject) => {
+    try {
+      const view = new window.google!.picker!.DocsView(window.google!.picker!.ViewId.SPREADSHEETS).setIncludeFolders(true);
+      const picker = new window.google!.picker!.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(accessToken)
+        .setDeveloperKey(apiKey)
+        .setTitle("Escolha a planilha no Google Drive")
+        .setCallback((data: PickerResponse) => {
+          if (data.action === window.google!.picker!.Action.PICKED) {
+            const doc = data.docs?.[0];
+            if (doc) resolve({ id: doc.id, name: doc.name, url: doc.url ?? `https://docs.google.com/spreadsheets/d/${doc.id}` });
+            else resolve(null);
+          } else if (data.action === window.google!.picker!.Action.CANCEL) {
+            resolve(null);
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    } catch (e) {
+      reject(e as Error);
+    }
+  });
+}
+
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
-async function getGoogleAccessToken(clientId: string): Promise<string> {
+export async function getGoogleAccessToken(clientId: string): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now() + 30000) return tokenCache.token;
   if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de vincular planilhas.");
   await ensureGoogleIdentityLib();
