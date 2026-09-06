@@ -5,6 +5,7 @@ import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { useAssignRole, useRoles } from "./roles";
 import { downloadTeamTemplate } from "./teamTemplate";
 import { TeamImportModal } from "./TeamImportModal";
+import { TeamMemberModal } from "./TeamMemberModal";
 import type { TeamUser } from "./types";
 import { useUsers } from "./useUsers";
 
@@ -19,6 +20,7 @@ export function TeamPage() {
   const { data: roles } = useRoles();
   const assignRole = useAssignRole();
   const [importing, setImporting] = useState(false);
+  const [editingUser, setEditingUser] = useState<TeamUser | null | "new">(null);
   const admin = isAdmin(profile);
 
   function handleAssignRole(user: TeamUser, roleId: string) {
@@ -40,9 +42,10 @@ export function TeamPage() {
         {admin && (
           <>
             <button className="btn sm ghost" onClick={downloadTeamTemplate}>Modelo</button>
-            <button className="btn sm primary" onClick={() => setImporting(true)}>
+            <button className="btn sm" onClick={() => setImporting(true)}>
               <span className="msi">folder_open</span> Importar do Drive
             </button>
+            <button className="btn sm primary" onClick={() => setEditingUser("new")}>+ Novo colaborador</button>
           </>
         )}
       </div>
@@ -60,12 +63,22 @@ export function TeamPage() {
                 <th>Setor</th>
                 <th>Papel</th>
                 <th>Perfil de acesso</th>
+                {admin && <th></th>}
               </tr>
             </thead>
             <tbody>
               {list.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.name || u.shortName || "—"}</td>
+                  <td>
+                    <div className="row" style={{ alignItems: "center", gap: 8 }}>
+                      {u.avatarImage ? (
+                        <img src={u.avatarImage} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
+                      ) : (
+                        <span className="msi" style={{ fontSize: 20 }}>account_circle</span>
+                      )}
+                      {u.name || u.shortName || "—"}
+                    </div>
+                  </td>
                   <td>{u.email || "—"}</td>
                   <td>{u.jobTitle || "—"}</td>
                   <td>{departmentName(u.departmentId)}</td>
@@ -85,6 +98,11 @@ export function TeamPage() {
                       (roles ?? []).find((r) => r.id === u.roleId)?.name ?? "—"
                     )}
                   </td>
+                  {admin && (
+                    <td>
+                      <button className="btn sm ghost" onClick={() => setEditingUser(u)}>Editar</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -94,6 +112,9 @@ export function TeamPage() {
 
       {importing && (
         <TeamImportModal users={list} onClose={() => setImporting(false)} onDone={() => refetch()} />
+      )}
+      {editingUser && (
+        <TeamMemberModal user={editingUser === "new" ? null : editingUser} onClose={() => setEditingUser(null)} />
       )}
     </div>
   );

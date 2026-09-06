@@ -140,6 +140,15 @@ begin
   end loop;
 end $$;
 
+-- 4a1. USERS: além da regra de referência acima (só admin escreve), cada
+-- colaborador também pode atualizar a PRÓPRIA linha (casada por e-mail) —
+-- usado por "Meu perfil" (foto, data de nascimento). Como em Projetos,
+-- quais campos cada perfil deve mexer é responsabilidade do cliente.
+drop policy if exists users_self_update on public.users;
+create policy users_self_update on public.users for update to authenticated
+  using ( company_id = public.app_company_id() and lower(data->>'email') = public.app_email() )
+  with check ( company_id = public.app_company_id() and lower(data->>'email') = public.app_email() );
+
 -- 4a2. PROJETOS: leitura por todos autenticados da empresa; criar/excluir só
 -- admin; ATUALIZAR é aberto a todos autenticados da empresa (qualquer
 -- colaborador do setor precisa poder colar o link do próprio setor no

@@ -27,7 +27,11 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         <span className="msi">notifications</span>
       </button>
       <button className="user-chip" onClick={() => navigate("/perfil")}>
-        <span className="avatar">{profile?.shortName?.[0]?.toUpperCase() ?? "?"}</span>
+        {profile?.avatarImage ? (
+          <img src={profile.avatarImage} alt="" className="avatar" style={{ objectFit: "cover" }} />
+        ) : (
+          <span className="avatar">{profile?.shortName?.[0]?.toUpperCase() ?? "?"}</span>
+        )}
         <span className="who">
           <b>{profile?.shortName}</b>
           <span>{profile?.role === "admin" ? "Administrador" : profile?.jobTitle || "Colaborador"}</span>

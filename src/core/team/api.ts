@@ -17,6 +17,12 @@ export function createUser(companyId: string, input: Partial<TeamUser>) {
     roleId: null,
     allowedViews: null,
     financeAccess: false,
+    avatarImage: null,
+    notes: "",
+    paymentType: null,
+    paymentAmount: null,
+    paymentBankInfo: "",
+    hasLogin: false,
     ...input,
   };
   return createRow(USERS_TABLE, companyId, user);
