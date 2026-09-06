@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCompany } from "../../core/companies/CompanyContext";
 import { useCompanySettings, useUpdateCompanySettings } from "../../core/companies/companySettings";
+import { useAppSettings, useUpdateAppSettings } from "../../core/companies/appSettings";
 import { pickFile, resizeImageToDataURL } from "../lib/imageUpload";
 import { BrandLogo } from "../ui/BrandLogo";
 
@@ -9,6 +10,10 @@ export function AdminPage() {
   const { data: settings } = useCompanySettings();
   const updateSettings = useUpdateCompanySettings();
   const [uploading, setUploading] = useState(false);
+  const { data: appSettings } = useAppSettings();
+  const updateAppSettings = useUpdateAppSettings();
+  const [clientId, setClientId] = useState("");
+  const [savedClientId, setSavedClientId] = useState(false);
 
   async function handleUpload() {
     const file = await pickFile("image/jpeg,image/png,image/jpg");
@@ -33,6 +38,16 @@ export function AdminPage() {
     await updateSettings.mutateAsync({ customLogo: null });
   }
 
+  useEffect(() => {
+    if (appSettings) setClientId(appSettings.googleClientId);
+  }, [appSettings]);
+
+  async function saveClientId() {
+    await updateAppSettings.mutateAsync({ googleClientId: clientId.trim() });
+    setSavedClientId(true);
+    setTimeout(() => setSavedClientId(false), 2000);
+  }
+
   return (
     <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
       <div className="card card-pad">
@@ -55,6 +70,30 @@ export function AdminPage() {
         <p className="hint">
           A imagem é redimensionada automaticamente. Cada empresa (Revisão/MEQ/MAC/VND) tem sua própria logo —
           troque de empresa na lateral para personalizar as outras.
+        </p>
+      </div>
+
+      <div className="card card-pad">
+        <div className="section-title"><span className="msi">sync</span> Sincronização com Google Sheets</div>
+        <p className="muted" style={{ fontSize: 12.5 }}>
+          Client ID OAuth do Google (mesmo para todas as empresas, um só cadastro no Google Cloud). Necessário para
+          que o módulo Financeiro consiga ler as planilhas vinculadas em cada aba.
+        </p>
+        <div className="row" style={{ gap: 8, margin: "10px 0" }}>
+          <input
+            className="input"
+            style={{ flex: 1 }}
+            placeholder="xxxxxxxxxx.apps.googleusercontent.com"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+          />
+          <button className="btn sm primary" onClick={saveClientId} disabled={updateAppSettings.isPending}>
+            {savedClientId ? "Salvo ✓" : "Salvar"}
+          </button>
+        </div>
+        <p className="hint">
+          Crie o Client ID em console.cloud.google.com (OAuth 2.0 do tipo "Aplicativo da Web"), autorizando a origem
+          deste site, com a API do Google Sheets ativada.
         </p>
       </div>
     </div>

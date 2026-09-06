@@ -4,6 +4,7 @@ import { fmtMoney } from "../../shared/lib/money";
 import { useTxns } from "./useFinance";
 import { FIN_TXN_STATUS, type FinanceTxn } from "./types";
 import { TxnModal } from "./TxnModal";
+import { SheetSyncPanel } from "./SheetSyncPanel";
 
 export function FluxoCaixaView() {
   const { data: txns, isLoading, error } = useTxns();
@@ -16,6 +17,7 @@ export function FluxoCaixaView() {
 
   return (
     <div>
+      <SheetSyncPanel view="fluxoCaixa" />
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Fluxo de Caixa <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />

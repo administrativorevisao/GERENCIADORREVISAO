@@ -4,6 +4,7 @@ import { fmtMoney } from "../../shared/lib/money";
 import { actualFor } from "./api";
 import { useGoals, useTxns } from "./useFinance";
 import { GoalModal } from "./GoalModal";
+import { SheetSyncPanel } from "./SheetSyncPanel";
 
 export function MetasView() {
   const { data: goals, isLoading } = useGoals();
@@ -17,6 +18,7 @@ export function MetasView() {
 
   return (
     <div>
+      <SheetSyncPanel view="metas" />
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Metas Financeiras <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />

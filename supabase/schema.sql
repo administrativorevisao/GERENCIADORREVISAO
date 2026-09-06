@@ -34,6 +34,15 @@ create table if not exists public.finance_payroll             (id text primary k
 create table if not exists public.finance_contractor_invoices (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_goals               (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_sheet_links         (id text primary key, data jsonb not null, updated_at timestamptz default now());
+-- app_settings NÃO é multiempresa (sem company_id) — é config do app inteiro
+-- (ex: Client ID OAuth do Google, compartilhado por todas as empresas porque
+-- é uma única origem/deploy). Uma linha só, id='global'.
+create table if not exists public.app_settings                (id text primary key, data jsonb not null, updated_at timestamptz default now());
+alter table public.app_settings enable row level security;
+drop policy if exists app_settings_read on public.app_settings;
+create policy app_settings_read on public.app_settings for select to authenticated using ( true );
+drop policy if exists app_settings_admin on public.app_settings;
+create policy app_settings_admin on public.app_settings for all to authenticated using ( public.is_admin() ) with check ( public.is_admin() );
 
 -- ---------- 2. MULTIEMPRESA: coluna company_id em toda tabela ----------
 -- Linhas antigas (criadas antes desta coluna existir) pertencem à empresa

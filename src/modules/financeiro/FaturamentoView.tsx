@@ -4,6 +4,7 @@ import { fmtMoney } from "../../shared/lib/money";
 import { useInvoices } from "./useFinance";
 import type { FinanceInvoice } from "./types";
 import { InvoiceModal } from "./InvoiceModal";
+import { SheetSyncPanel } from "./SheetSyncPanel";
 
 export function FaturamentoView() {
   const { data: invoices, isLoading } = useInvoices();
@@ -15,6 +16,7 @@ export function FaturamentoView() {
 
   return (
     <div>
+      <SheetSyncPanel view="faturamento" />
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Faturamento <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />

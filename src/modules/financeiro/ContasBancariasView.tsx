@@ -4,6 +4,7 @@ import { accountBalance } from "./api";
 import { useAccounts, useTxns } from "./useFinance";
 import type { FinanceAccount } from "./types";
 import { AccountModal } from "./AccountModal";
+import { SheetSyncPanel } from "./SheetSyncPanel";
 
 export function ContasBancariasView() {
   const { data: accounts, isLoading } = useAccounts();
@@ -17,6 +18,7 @@ export function ContasBancariasView() {
 
   return (
     <div>
+      <SheetSyncPanel view="contasBancarias" />
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Contas Bancárias <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />

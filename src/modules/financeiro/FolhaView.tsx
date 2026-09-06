@@ -5,6 +5,7 @@ import { payrollNet } from "./api";
 import { usePayroll } from "./useFinance";
 import type { FinancePayroll } from "./types";
 import { PayrollModal } from "./PayrollModal";
+import { SheetSyncPanel } from "./SheetSyncPanel";
 
 export function FolhaView() {
   const { data: payroll, isLoading } = usePayroll();
@@ -17,6 +18,7 @@ export function FolhaView() {
 
   return (
     <div>
+      <SheetSyncPanel view="folha" />
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Folha de Pagamento <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />

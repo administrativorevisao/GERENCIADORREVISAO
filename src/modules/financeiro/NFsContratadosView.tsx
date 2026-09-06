@@ -5,6 +5,7 @@ import { contractorLabel } from "./api";
 import { useContractorInvoices } from "./useFinance";
 import type { FinanceContractorInvoice } from "./types";
 import { ContractorInvoiceModal } from "./ContractorInvoiceModal";
+import { SheetSyncPanel } from "./SheetSyncPanel";
 
 export function NFsContratadosView() {
   const { data: invoices, isLoading } = useContractorInvoices();
@@ -17,6 +18,7 @@ export function NFsContratadosView() {
 
   return (
     <div>
+      <SheetSyncPanel view="nfsContratados" />
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>NFs de Contratados <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />

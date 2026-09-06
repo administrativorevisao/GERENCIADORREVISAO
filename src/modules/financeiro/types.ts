@@ -1,3 +1,16 @@
+export const FIN_VIEWS = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "fluxoCaixa", label: "Fluxo de Caixa" },
+  { id: "contas", label: "Contas a Pagar/Receber" },
+  { id: "faturamento", label: "Faturamento" },
+  { id: "contasBancarias", label: "Contas Bancárias" },
+  { id: "folha", label: "Folha de Pagamento" },
+  { id: "nfsContratados", label: "NFs de Contratados" },
+  { id: "metas", label: "Metas Financeiras" },
+  { id: "dre", label: "DRE" },
+] as const;
+export type FinViewId = (typeof FIN_VIEWS)[number]["id"];
+
 export type DreGroup = "receitaBruta" | "deducoes" | "custos" | "despesasOperacionais";
 export const DRE_GROUPS: Record<DreGroup, string> = {
   receitaBruta: "Receita Bruta",
@@ -45,6 +58,7 @@ export interface FinanceAccount {
   openingDate: string;
   notes: string;
   active: boolean;
+  sourceSheetLinkId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +78,7 @@ export interface FinanceInvoice {
   accountId: string | null;
   description: string;
   linkedTxnId: string | null;
+  sourceSheetLinkId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -81,6 +96,7 @@ export interface FinancePayroll {
   accountId: string | null;
   notes: string;
   linkedTxnId: string | null;
+  sourceSheetLinkId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +115,7 @@ export interface FinanceContractorInvoice {
   accountId: string | null;
   notes: string;
   linkedTxnId: string | null;
+  sourceSheetLinkId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +130,7 @@ export interface FinanceGoal {
   targetAmount: number;
   departmentId: string | null;
   notes: string;
+  sourceSheetLinkId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

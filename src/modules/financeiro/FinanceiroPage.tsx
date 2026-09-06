@@ -10,20 +10,7 @@ import { FolhaView } from "./FolhaView";
 import { NFsContratadosView } from "./NFsContratadosView";
 import { MetasView } from "./MetasView";
 import { DREView } from "./DREView";
-
-const FIN_VIEWS = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "fluxoCaixa", label: "Fluxo de Caixa" },
-  { id: "contas", label: "Contas a Pagar/Receber" },
-  { id: "faturamento", label: "Faturamento" },
-  { id: "contasBancarias", label: "Contas Bancárias" },
-  { id: "folha", label: "Folha de Pagamento" },
-  { id: "nfsContratados", label: "NFs de Contratados" },
-  { id: "metas", label: "Metas Financeiras" },
-  { id: "dre", label: "DRE" },
-] as const;
-
-type FinViewId = (typeof FIN_VIEWS)[number]["id"];
+import { FIN_VIEWS, type FinViewId } from "./types";
 
 // Financeiro é sigiloso: só admin ou colaboradores com financeAccess=true
 // veem qualquer coisa aqui — mesma regra do app original (Perm.canView).
