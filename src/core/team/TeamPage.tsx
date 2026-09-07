@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { isAdmin } from "../../shared/auth/types";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
+import { Avatar } from "../../shared/ui/Avatar";
 import { useAssignRole, useRoles } from "./roles";
 import { downloadTeamTemplate } from "./teamTemplate";
 import { TeamImportModal } from "./TeamImportModal";
@@ -75,11 +76,7 @@ export function TeamPage() {
                 <tr key={u.id}>
                   <td>
                     <div className="row" style={{ alignItems: "center", gap: 8 }}>
-                      {u.avatarImage ? (
-                        <img src={u.avatarImage} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
-                      ) : (
-                        <span className="msi" style={{ fontSize: 20 }}>account_circle</span>
-                      )}
+                      <Avatar name={u.shortName || u.name} image={u.avatarImage} size="sm" />
                       {u.name || u.shortName || "—"}
                     </div>
                   </td>

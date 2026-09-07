@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { Avatar } from "../ui/Avatar";
 import { NAV } from "./nav";
 
 export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
@@ -27,11 +28,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         <span className="msi">notifications</span>
       </button>
       <button className="user-chip" onClick={() => navigate("/perfil")}>
-        {profile?.avatarImage ? (
-          <img src={profile.avatarImage} alt="" className="avatar" style={{ objectFit: "cover" }} />
-        ) : (
-          <span className="avatar">{profile?.shortName?.[0]?.toUpperCase() ?? "?"}</span>
-        )}
+        <Avatar name={profile?.shortName} image={profile?.avatarImage} />
         <span className="who">
           <b>{profile?.shortName}</b>
           <span>{profile?.role === "admin" ? "Administrador" : profile?.jobTitle || "Colaborador"}</span>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { pickFile, resizeImageToDataURL } from "../lib/imageUpload";
+import { Avatar } from "../ui/Avatar";
 import { useAuth } from "./AuthContext";
 
 export function ProfilePage() {
@@ -35,13 +36,7 @@ export function ProfilePage() {
     <div className="card card-pad" style={{ maxWidth: 480 }}>
       <div className="section-title">Perfil</div>
       <div className="row" style={{ alignItems: "center", gap: 14, marginBottom: 14 }}>
-        {profile.avatarImage ? (
-          <img src={profile.avatarImage} alt="" style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }} />
-        ) : (
-          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--surface-2, #eee)", display: "grid", placeItems: "center" }}>
-            <span className="msi" style={{ fontSize: 32 }}>person</span>
-          </div>
-        )}
+        <Avatar name={profile.shortName || profile.name} image={profile.avatarImage} size="lg" />
         <button className="btn sm" onClick={handleAvatarUpload} disabled={uploadingAvatar}>
           {uploadingAvatar ? "Enviando…" : "Trocar foto"}
         </button>

@@ -75,7 +75,10 @@ input, select, textarea { font-family: inherit; font-size: 14px }
 .hamburger { display: none }
 .user-chip { display: flex; align-items: center; gap: 9px; padding: 4px 12px 4px 4px; border-radius: 30px; border: none; background: transparent; transition: var(--tr) }
 .user-chip:hover { background: var(--bg-soft) }
-.avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; color: #fff; font-size: 12px; flex: none; background: var(--accent) }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; color: #fff; font-size: 12px; flex: none; background: var(--accent); object-fit: cover; overflow: hidden }
+.avatar-lg { width: 64px; height: 64px; font-size: 22px }
+.avatar-sm { width: 24px; height: 24px; font-size: 10px }
+.avatar-fallback { background: var(--surface-2, #e5e7eb); color: var(--muted, #667); display: grid; place-items: center }
 .user-chip .who { text-align: left; line-height: 1.15 }
 .user-chip .who b { font-size: 12.5px; display: block; font-weight: 500 }
 .user-chip .who span { font-size: 10.5px; color: var(--text-mut) }

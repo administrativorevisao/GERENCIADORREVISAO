@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { pickFile, resizeImageToDataURL } from "../../shared/lib/imageUpload";
+import { Avatar } from "../../shared/ui/Avatar";
 import { createOrResetLogin } from "./adminAuth";
 import { useRoles } from "./roles";
 import { useCreateUser, useUpdateUser } from "./useUsers";
@@ -97,13 +98,7 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
         <div className="modal-head"><h3>{user ? "Editar colaborador" : "Novo colaborador"}</h3></div>
         <div className="modal-body">
           <div className="row" style={{ alignItems: "center", gap: 14, marginBottom: 12 }}>
-            {avatarImage ? (
-              <img src={avatarImage} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover" }} />
-            ) : (
-              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--surface-2, #eee)", display: "grid", placeItems: "center" }}>
-                <span className="msi">person</span>
-              </div>
-            )}
+            <Avatar name={shortName || name} image={avatarImage} size="lg" />
             <button className="btn sm" onClick={handleAvatarUpload} disabled={uploadingAvatar}>
               {uploadingAvatar ? "Enviando…" : "Enviar foto"}
             </button>
