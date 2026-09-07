@@ -1,11 +1,8 @@
 import { createRow, listRows, newId, removeRow, updateRow } from "../../shared/lib/jsonStore";
+import { todayISO as today } from "../../shared/lib/dates";
 import type { Task, TaskStatus } from "./types";
 
 const TABLE = "tasks";
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export function listTasks(companyId: string) {
   return listRows<Task>(TABLE, companyId);

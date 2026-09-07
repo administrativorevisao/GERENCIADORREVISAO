@@ -1,5 +1,16 @@
+// Data local em "YYYY-MM-DD" — NÃO usar toISOString() aqui: ela converte
+// para UTC, o que empurra a data para o dia seguinte à noite em fusos
+// negativos (todo o Brasil), fazendo tarefas/prazos "de hoje" desaparecerem
+// horas antes da meia-noite local.
+function localDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateISO(new Date());
 }
 
 export function fmtDate(iso: string | null | undefined): string {
@@ -18,6 +29,6 @@ export function dueStatus(dueDate: string | null | undefined, status: string): D
   if (dueDate === today) return "today";
   const soonThreshold = new Date();
   soonThreshold.setDate(soonThreshold.getDate() + 3);
-  if (dueDate <= soonThreshold.toISOString().slice(0, 10)) return "soon";
+  if (dueDate <= localDateISO(soonThreshold)) return "soon";
   return "ok";
 }

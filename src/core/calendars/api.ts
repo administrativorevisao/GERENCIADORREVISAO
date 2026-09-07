@@ -1,4 +1,5 @@
 import { createRow, listRows, newId, updateRow, removeRow } from "../../shared/lib/jsonStore";
+import { todayISO } from "../../shared/lib/dates";
 import { DEFAULT_CALENDARS, type Calendar, type CalendarEvent } from "./types";
 
 const CALENDARS_TABLE = "calendars";
@@ -43,7 +44,7 @@ export function createCalendarEvent(companyId: string, input: Partial<CalendarEv
     id: newId("cev"),
     calendarId: "",
     title: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: todayISO(),
     description: "",
     createdBy,
     createdAt: new Date().toISOString(),
