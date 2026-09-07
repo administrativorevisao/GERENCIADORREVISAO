@@ -23,9 +23,13 @@ export function TeamPage() {
   const [editingUser, setEditingUser] = useState<TeamUser | null | "new">(null);
   const admin = isAdmin(profile);
 
-  function handleAssignRole(user: TeamUser, roleId: string) {
+  async function handleAssignRole(user: TeamUser, roleId: string) {
     const role = (roles ?? []).find((r) => r.id === roleId) ?? null;
-    assignRole.mutate({ user, role });
+    try {
+      await assignRole.mutateAsync({ user, role });
+    } catch (e) {
+      alert((e as Error).message || "Não foi possível atribuir esse perfil.");
+    }
   }
 
   if (isLoading) return <div className="empty">Carregando equipe…</div>;

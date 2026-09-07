@@ -65,9 +65,13 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
       financeAccess: role ? role.financeAccess : (user?.financeAccess ?? false),
       allowedViews: role ? role.allowedViews : (user?.allowedViews ?? null),
     };
-    if (user) await updateUser.mutateAsync({ ...user, ...patch });
-    else await createUser.mutateAsync(patch);
-    onClose();
+    try {
+      if (user) await updateUser.mutateAsync({ ...user, ...patch });
+      else await createUser.mutateAsync(patch);
+      onClose();
+    } catch (e) {
+      alert((e as Error).message || "Não foi possível salvar.");
+    }
   }
 
   async function handleCreateLogin() {
