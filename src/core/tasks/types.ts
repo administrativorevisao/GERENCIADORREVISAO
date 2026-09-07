@@ -36,4 +36,7 @@ export interface Task {
   // concluí-la dispare a criação automática da tarefa da próxima etapa.
   procedureRunId?: string | null;
   procedureStepIndex?: number | null;
+  // Micro setor dentro do departamento (hoje só usado pelo Marketing —
+  // ver modules/marketing/sectors.ts — ex: "audiovisual", "copy").
+  microSectorId?: string | null;
 }

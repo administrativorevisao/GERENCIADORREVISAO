@@ -42,6 +42,8 @@ create table if not exists public.roles                       (id text primary k
 -- (etapas em ordem, cada uma com responsável) e as execuções em andamento.
 create table if not exists public.procedures                  (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.procedure_runs              (id text primary key, data jsonb not null, updated_at timestamptz default now());
+-- Backlog de lançamentos do Marketing (Marketing → Backlog de lançamentos).
+create table if not exists public.launches                    (id text primary key, data jsonb not null, updated_at timestamptz default now());
 -- app_settings NÃO é multiempresa (sem company_id) — é config do app inteiro
 -- (ex: Client ID OAuth do Google, compartilhado por todas as empresas porque
 -- é uma única origem/deploy). Uma linha só, id='global'.
@@ -62,7 +64,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs','launches'
   ]
   loop
     execute format('alter table public.%I add column if not exists company_id text;', t);
@@ -123,7 +125,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs','launches'
   ]
   loop
     execute format('alter table public.%I enable row level security;', t);
@@ -219,6 +221,19 @@ create policy procedure_runs_update on public.procedure_runs for update to authe
   using ( company_id = public.app_company_id() ) with check ( company_id = public.app_company_id() );
 drop policy if exists procedure_runs_delete on public.procedure_runs;
 create policy procedure_runs_delete on public.procedure_runs for delete to authenticated using ( company_id = public.app_company_id() and public.is_admin() );
+
+-- 4b4. BACKLOG DE LANÇAMENTOS (Marketing): leitura, criação e atualização
+-- abertas a qualquer autenticado da empresa (é um quadro colaborativo do
+-- time); excluir é só admin.
+drop policy if exists launches_read on public.launches;
+create policy launches_read on public.launches for select to authenticated using ( company_id = public.app_company_id() );
+drop policy if exists launches_insert on public.launches;
+create policy launches_insert on public.launches for insert to authenticated with check ( company_id = public.app_company_id() );
+drop policy if exists launches_update on public.launches;
+create policy launches_update on public.launches for update to authenticated
+  using ( company_id = public.app_company_id() ) with check ( company_id = public.app_company_id() );
+drop policy if exists launches_delete on public.launches;
+create policy launches_delete on public.launches for delete to authenticated using ( company_id = public.app_company_id() and public.is_admin() );
 
 -- 4b3. FINANCEIRO: sigiloso — leitura E escrita exigem is_finance_authorized(),
 -- sempre dentro da própria empresa.
