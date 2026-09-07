@@ -23,6 +23,7 @@ export const NAV: NavItem[] = [
   { id: "cs", label: "CS / CX", path: "/cs", icon: "support_agent" },
   { id: "financeiro", label: "Financeiro", path: "/financeiro", icon: "account_balance_wallet", group: "Financeiro" },
   { id: "team", label: "Equipe", path: "/equipe", icon: "group", group: "Gestão" },
+  { id: "teamStandards", label: "Padrões da equipe", path: "/padroes-da-equipe", icon: "checklist" },
   { id: "notifications", label: "Notificações", path: "/notificacoes", icon: "notifications" },
   { id: "admin", label: "Administração", path: "/admin", icon: "settings", adminOnly: true },
   { id: "profile", label: "Perfil", path: "/perfil", icon: "account_circle", group: "Conta" },

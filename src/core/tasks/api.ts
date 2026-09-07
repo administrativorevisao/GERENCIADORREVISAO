@@ -31,7 +31,7 @@ export function createTask(companyId: string, input: Partial<Task>, createdBy: s
   return createRow(TABLE, companyId, task);
 }
 
-export function updateTaskStatus(task: Task, status: TaskStatus) {
+export async function updateTaskStatus(task: Task, status: TaskStatus) {
   const now = new Date().toISOString();
   const updated: Task = {
     ...task,
@@ -39,7 +39,14 @@ export function updateTaskStatus(task: Task, status: TaskStatus) {
     updatedAt: now,
     completedAt: status === "done" ? now : null,
   };
-  return updateRow(TABLE, updated);
+  const saved = await updateRow(TABLE, updated);
+  // Import dinâmico (não no topo do arquivo) para não criar uma dependência
+  // circular: teamStandards/api.ts importa createTask daqui mesmo.
+  if (status === "done" && task.procedureRunId) {
+    const { advanceProcedureRun } = await import("../teamStandards/api");
+    await advanceProcedureRun(task.procedureRunId).catch((e) => console.error("Falha ao avançar procedimento:", e));
+  }
+  return saved;
 }
 
 export function updateTask(task: Task) {

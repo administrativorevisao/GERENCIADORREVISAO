@@ -23,6 +23,17 @@ export async function listRows<T extends JsonRow>(table: string, companyId: stri
   return (data ?? []).map((row) => ({ id: row.id, ...(row.data as object) }) as T);
 }
 
+// Busca uma linha só pelo id (sem precisar saber a empresa — a RLS já
+// garante que só volta algo se for da empresa do usuário logado). Usado
+// quando um fluxo só tem o id à mão (ex: avançar uma etapa de procedimento
+// a partir do id salvo na tarefa).
+export async function getRow<T extends JsonRow>(table: string, id: string): Promise<T | null> {
+  const { data, error } = await requireClient().from(table).select("id,data").eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return { id: data.id, ...(data.data as object) } as T;
+}
+
 export async function createRow<T extends JsonRow>(table: string, companyId: string, row: T): Promise<T> {
   const { error } = await requireClient()
     .from(table)

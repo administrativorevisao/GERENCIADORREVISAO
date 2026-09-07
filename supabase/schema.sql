@@ -38,6 +38,10 @@ create table if not exists public.finance_sheet_links         (id text primary k
 -- Administração — cada um empacota isAdmin/financeAccess/allowedViews,
 -- aplicados ao colaborador que o tiver atribuído (users.roleId).
 create table if not exists public.roles                       (id text primary key, data jsonb not null, updated_at timestamptz default now());
+-- Procedimentos Padrão da equipe (Gestão → Padrões da equipe): o modelo
+-- (etapas em ordem, cada uma com responsável) e as execuções em andamento.
+create table if not exists public.procedures                  (id text primary key, data jsonb not null, updated_at timestamptz default now());
+create table if not exists public.procedure_runs              (id text primary key, data jsonb not null, updated_at timestamptz default now());
 -- app_settings NÃO é multiempresa (sem company_id) — é config do app inteiro
 -- (ex: Client ID OAuth do Google, compartilhado por todas as empresas porque
 -- é uma única origem/deploy). Uma linha só, id='global'.
@@ -58,7 +62,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs'
   ]
   loop
     execute format('alter table public.%I add column if not exists company_id text;', t);
@@ -119,7 +123,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs'
   ]
   loop
     execute format('alter table public.%I enable row level security;', t);
@@ -131,7 +135,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['departments','teams','users','programs','task_templates','recurring_activities','weekly_objectives','link_templates','editais','calendars','calendar_events','company_settings','roles']
+  foreach t in array array['departments','teams','users','programs','task_templates','recurring_activities','weekly_objectives','link_templates','editais','calendars','calendar_events','company_settings','roles','procedures']
   loop
     execute format('drop policy if exists %I_read on public.%I;', t, t);
     execute format('create policy %I_read on public.%I for select to authenticated using (company_id = public.app_company_id());', t, t);
@@ -171,9 +175,14 @@ create policy tasks_read on public.tasks for select to authenticated
                or data->>'responsibleId' = public.app_user_id()
                or (data->>'teamId' is not null and data->>'teamId' = public.app_team_id())) );
 
+-- Inserção aberta a qualquer autenticado da empresa (não só admin): a tela
+-- de Tarefas já mostra "+ Nova tarefa" para todo mundo, e o avanço
+-- automático de um Procedimento Padrão (ver 4b3 abaixo) precisa poder
+-- criar a tarefa da próxima etapa a partir da ação de QUALQUER colaborador
+-- que concluiu a etapa anterior — não só quando for um admin.
 drop policy if exists tasks_insert on public.tasks;
 create policy tasks_insert on public.tasks for insert to authenticated
-  with check ( company_id = public.app_company_id() and public.is_admin() );
+  with check ( company_id = public.app_company_id() );
 
 drop policy if exists tasks_update on public.tasks;
 create policy tasks_update on public.tasks for update to authenticated
@@ -194,6 +203,22 @@ create policy meetings_update on public.meetings for update to authenticated
   using ( company_id = public.app_company_id() and public.is_admin() ) with check ( company_id = public.app_company_id() and public.is_admin() );
 drop policy if exists meetings_delete on public.meetings;
 create policy meetings_delete on public.meetings for delete to authenticated using ( company_id = public.app_company_id() and public.is_admin() );
+
+-- 4b3. EXECUÇÕES DE PROCEDIMENTO PADRÃO: leitura aberta à empresa; criar e
+-- atualizar também abertos a qualquer autenticado da empresa (iniciar uma
+-- execução, e o avanço automático de etapa, podem ser disparados por
+-- qualquer colaborador — não só admin); excluir é só admin. O MODELO do
+-- procedimento (tabela "procedures") já segue a regra padrão de tabela de
+-- referência (só admin escreve), aplicada no loop da seção 4a.
+drop policy if exists procedure_runs_read on public.procedure_runs;
+create policy procedure_runs_read on public.procedure_runs for select to authenticated using ( company_id = public.app_company_id() );
+drop policy if exists procedure_runs_insert on public.procedure_runs;
+create policy procedure_runs_insert on public.procedure_runs for insert to authenticated with check ( company_id = public.app_company_id() );
+drop policy if exists procedure_runs_update on public.procedure_runs;
+create policy procedure_runs_update on public.procedure_runs for update to authenticated
+  using ( company_id = public.app_company_id() ) with check ( company_id = public.app_company_id() );
+drop policy if exists procedure_runs_delete on public.procedure_runs;
+create policy procedure_runs_delete on public.procedure_runs for delete to authenticated using ( company_id = public.app_company_id() and public.is_admin() );
 
 -- 4b3. FINANCEIRO: sigiloso — leitura E escrita exigem is_finance_authorized(),
 -- sempre dentro da própria empresa.

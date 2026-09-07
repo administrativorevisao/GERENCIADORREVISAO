@@ -1,6 +1,6 @@
 export type TaskStatus = "todo" | "doing" | "done";
 export type TaskPriority = "high" | "medium" | "low";
-export type TaskType = "project" | "recurring" | "standalone" | "process" | "weekly_objective" | "operational_event";
+export type TaskType = "project" | "recurring" | "standalone" | "process" | "weekly_objective" | "operational_event" | "procedure_step";
 
 export const STATUSES: TaskStatus[] = ["todo", "doing", "done"];
 
@@ -31,4 +31,9 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  // Presentes só em tarefas geradas por um Procedimento Padrão (ver
+  // core/teamStandards) — ligam a tarefa à execução em andamento, para que
+  // concluí-la dispare a criação automática da tarefa da próxima etapa.
+  procedureRunId?: string | null;
+  procedureStepIndex?: number | null;
 }

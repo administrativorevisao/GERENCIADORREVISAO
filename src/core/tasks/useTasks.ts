@@ -31,7 +31,13 @@ export function useUpdateTaskStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ task, status }: { task: Task; status: TaskStatus }) => updateTaskStatus(task, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksKey(company.id) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: tasksKey(company.id) });
+      // Concluir uma tarefa pode disparar o avanço automático de um
+      // Procedimento Padrão (ver core/teamStandards/api.ts) — atualiza a
+      // lista de execuções também, por garantia (invalidação é barata).
+      queryClient.invalidateQueries({ queryKey: ["procedure_runs", company.id] });
+    },
   });
 }
 

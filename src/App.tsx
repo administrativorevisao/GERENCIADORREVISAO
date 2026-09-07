@@ -13,6 +13,7 @@ import { CalendarPage } from "./core/calendar/CalendarPage";
 import { MeetingsPage } from "./core/meetings/MeetingsPage";
 import { NotificationsPage } from "./core/notifications/NotificationsPage";
 import { TeamPage } from "./core/team/TeamPage";
+import { TeamStandardsPage } from "./core/teamStandards/TeamStandardsPage";
 import { PedagogicoPage } from "./modules/pedagogico/PedagogicoPage";
 import { ComercialPage } from "./modules/comercial/ComercialPage";
 import { MarketingPage } from "./modules/marketing/MarketingPage";
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/cs" element={<CsPage />} />
         <Route path="/financeiro" element={<FinanceiroPage />} />
         <Route path="/equipe" element={<TeamPage />} />
+        <Route path="/padroes-da-equipe" element={<TeamStandardsPage />} />
         <Route path="/notificacoes" element={<NotificationsPage />} />
         <Route path="/perfil" element={<ProfilePage />} />
         <Route
