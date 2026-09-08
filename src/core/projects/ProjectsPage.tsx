@@ -7,6 +7,7 @@ import { usePrograms, useProjects, useUpdateProject } from "./useProjects";
 import { ProgramModal } from "./ProgramModal";
 import { ProjectModal } from "./ProjectModal";
 import { ProjectImportModal } from "./ProjectImportModal";
+import { SubProgramModal } from "./SubProgramModal";
 import { downloadProjectTemplate } from "./projectTemplate";
 import { PROJECT_STATUS_LABEL, type Program, type Project } from "./types";
 
@@ -47,6 +48,20 @@ function programProgress(program: Program, projects: Project[], tasks: { status:
   return { projects: progProjects, total: relevantTasks.length, done, percent };
 }
 
+// Dentro de um programa, os projetos podem estar agrupados por subprograma
+// (ex: cada concurso dentro do programa "Perpétuo"). O que não estiver
+// ligado a nenhum subprograma existente cai em "ungrouped".
+function groupBySubProgram(program: Program, progProjects: Project[]) {
+  const bySub = new Map<string, Project[]>();
+  for (const sp of program.subPrograms) bySub.set(sp.id, []);
+  const ungrouped: Project[] = [];
+  for (const p of progProjects) {
+    if (p.subProgramId && bySub.has(p.subProgramId)) bySub.get(p.subProgramId)!.push(p);
+    else ungrouped.push(p);
+  }
+  return { bySub, ungrouped };
+}
+
 export function ProjectsPage() {
   const { profile } = useAuth();
   const { data: programs, isLoading: loadingPrograms } = usePrograms();
@@ -55,9 +70,10 @@ export function ProjectsPage() {
   const updateProject = useUpdateProject();
   const [newProgram, setNewProgram] = useState(false);
   const [newProjectIn, setNewProjectIn] = useState<Program | null>(null);
+  const [newSubProgramIn, setNewSubProgramIn] = useState<Program | null>(null);
   const [importing, setImporting] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null); // programId, or "none"
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null); // programId, "none", or "sub:<id>"
 
   if (loadingPrograms || loadingProjects) return <div className="empty">Carregando projetos…</div>;
 
@@ -72,20 +88,21 @@ export function ProjectsPage() {
     setDraggingId(project.id);
   }
 
-  function handleDrop(e: React.DragEvent, programId: string | null) {
+  function handleDrop(e: React.DragEvent, programId: string | null, subProgramId: string | null = null) {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverTarget(null);
     const projectId = e.dataTransfer.getData(DRAG_MIME) || draggingId;
     setDraggingId(null);
     if (!projectId) return;
     const project = projs.find((p) => p.id === projectId);
-    if (!project || project.programId === programId) return;
-    updateProject.mutate({ ...project, programId });
+    if (!project || (project.programId === programId && project.subProgramId === subProgramId)) return;
+    updateProject.mutate({ ...project, programId, subProgramId });
   }
 
   function dropZoneProps(target: string) {
     return {
-      onDragOver: (e: React.DragEvent) => { e.preventDefault(); setDragOverTarget(target); },
+      onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragOverTarget(target); },
       onDragLeave: () => setDragOverTarget((cur) => (cur === target ? null : cur)),
     };
   }
@@ -120,6 +137,8 @@ export function ProjectsPage() {
       {progs.map((program) => {
         const { projects: progProjects, done, total, percent } = programProgress(program, projs, allTasks);
         const isOver = dragOverTarget === program.id;
+        const { bySub, ungrouped } = groupBySubProgram(program, progProjects);
+        const hasSubPrograms = program.subPrograms.length > 0;
         return (
           <div
             key={program.id}
@@ -131,7 +150,7 @@ export function ProjectsPage() {
               outlineOffset: isOver ? 2 : undefined,
             }}
             {...(admin ? dropZoneProps(program.id) : {})}
-            onDrop={admin ? (e) => handleDrop(e, program.id) : undefined}
+            onDrop={admin ? (e) => handleDrop(e, program.id, null) : undefined}
           >
             <div className="row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, display: "grid", placeItems: "center", fontSize: 22, background: `color-mix(in srgb, ${program.color} 16%, transparent)`, flex: "none" }}>
@@ -146,26 +165,98 @@ export function ProjectsPage() {
                 <div className="muted" style={{ fontSize: 11 }}>{progProjects.length} projeto(s) · {done}/{total} tarefas</div>
               </div>
               {admin && (
-                <button className="btn primary sm" onClick={() => setNewProjectIn(program)}>+ Projeto</button>
+                <>
+                  <button className="btn sm ghost" onClick={() => setNewSubProgramIn(program)}>+ Concurso</button>
+                  <button className="btn primary sm" onClick={() => setNewProjectIn(program)}>+ Projeto</button>
+                </>
               )}
             </div>
             <div className="progress" style={{ marginTop: 10 }}>
               <span style={{ width: `${percent}%`, background: program.color }} />
             </div>
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", marginTop: 12 }}>
-              {progProjects.length === 0 && (
-                <div className="hint">{admin ? "Nenhum projeto neste programa ainda. Arraste um projeto até aqui para vinculá-lo." : "Nenhum projeto neste programa ainda."}</div>
-              )}
-              {progProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  draggable={admin}
-                  onDragStart={handleDragStart}
-                  onDragEnd={() => { setDraggingId(null); setDragOverTarget(null); }}
-                />
-              ))}
-            </div>
+
+            {!hasSubPrograms && (
+              <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", marginTop: 12 }}>
+                {progProjects.length === 0 && (
+                  <div className="hint">{admin ? "Nenhum projeto neste programa ainda. Arraste um projeto até aqui para vinculá-lo." : "Nenhum projeto neste programa ainda."}</div>
+                )}
+                {progProjects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    draggable={admin}
+                    onDragStart={handleDragStart}
+                    onDragEnd={() => { setDraggingId(null); setDragOverTarget(null); }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {hasSubPrograms && program.subPrograms.map((sp) => {
+              const spProjects = bySub.get(sp.id) ?? [];
+              const isOverSub = dragOverTarget === `sub:${sp.id}`;
+              return (
+                <div
+                  key={sp.id}
+                  className="card card-pad"
+                  style={{
+                    marginTop: 10,
+                    background: "color-mix(in srgb, currentColor 4%, transparent)",
+                    outline: isOverSub ? "2px dashed var(--accent, #6a5acd)" : undefined,
+                    outlineOffset: isOverSub ? 2 : undefined,
+                  }}
+                  {...(admin ? dropZoneProps(`sub:${sp.id}`) : {})}
+                  onDrop={admin ? (e) => handleDrop(e, program.id, sp.id) : undefined}
+                >
+                  <div className="row" style={{ alignItems: "center", gap: 8 }}>
+                    <span className="msi" style={{ fontSize: 16 }}>gavel</span>
+                    <b style={{ fontSize: 13 }}>{sp.name}</b>
+                    <span className="muted" style={{ fontSize: 11 }}>{spProjects.length} projeto(s)</span>
+                  </div>
+                  <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", marginTop: 8 }}>
+                    {spProjects.length === 0 && (
+                      <div className="hint">Arraste aqui os projetos deste concurso.</div>
+                    )}
+                    {spProjects.map((project) => (
+                      <ProjectCard
+                        key={project.id}
+                        project={project}
+                        draggable={admin}
+                        onDragStart={handleDragStart}
+                        onDragEnd={() => { setDraggingId(null); setDragOverTarget(null); }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {hasSubPrograms && (
+              <div
+                className="card card-pad"
+                style={{
+                  marginTop: 10,
+                  outline: dragOverTarget === `none-in:${program.id}` ? "2px dashed var(--accent, #6a5acd)" : undefined,
+                  outlineOffset: dragOverTarget === `none-in:${program.id}` ? 2 : undefined,
+                }}
+                {...(admin ? dropZoneProps(`none-in:${program.id}`) : {})}
+                onDrop={admin ? (e) => handleDrop(e, program.id, null) : undefined}
+              >
+                <span className="muted" style={{ fontSize: 11 }}>Sem concurso definido</span>
+                <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", marginTop: 8 }}>
+                  {ungrouped.length === 0 && <div className="hint">Arraste aqui para tirar um projeto de um concurso.</div>}
+                  {ungrouped.map((project) => (
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      draggable={admin}
+                      onDragStart={handleDragStart}
+                      onDragEnd={() => { setDraggingId(null); setDragOverTarget(null); }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -211,6 +302,9 @@ export function ProjectsPage() {
       })()}
 
       {newProgram && <ProgramModal onClose={() => setNewProgram(false)} />}
+      {newSubProgramIn && (
+        <SubProgramModal program={newSubProgramIn} onClose={() => setNewSubProgramIn(null)} />
+      )}
       {newProjectIn && (
         <ProjectModal
           program={newProjectIn.id ? newProjectIn : undefined}

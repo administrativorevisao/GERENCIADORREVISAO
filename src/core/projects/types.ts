@@ -64,6 +64,7 @@ export interface Project {
   description: string;
   iconImage: string | null;
   programId: string | null;
+  subProgramId: string | null;
   ownerId: string | null;
   startDate: string;
   dueDate: string;
@@ -91,4 +92,13 @@ export interface Program {
   color: string;
   departmentId: string | null;
   ownerId: string | null;
+  subPrograms: SubProgram[];
+}
+
+// Agrupamento dentro de um programa — ex: dentro do programa "Perpétuo",
+// cada concurso (PGE/AC, PGM Rio de Janeiro...) é um subprograma que junta
+// os vários projetos/sprints daquele mesmo concurso.
+export interface SubProgram {
+  id: string;
+  name: string;
 }

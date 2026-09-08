@@ -23,9 +23,14 @@ export function createProgram(companyId: string, input: Partial<Program>) {
     color: "#6d28d9",
     departmentId: null,
     ownerId: null,
+    subPrograms: [],
     ...input,
   };
   return createRow(PROGRAMS_TABLE, companyId, program);
+}
+
+export function updateProgram(program: Program) {
+  return updateRow(PROGRAMS_TABLE, program);
 }
 
 const emptyBriefing: Briefing = { content: "", keyDates: [], updatedAt: null, updatedBy: null };
@@ -37,6 +42,7 @@ export function createProject(companyId: string, input: Partial<Project>) {
     description: "",
     iconImage: null,
     programId: null,
+    subProgramId: null,
     ownerId: null,
     startDate: todayISO(),
     dueDate: todayISO(),

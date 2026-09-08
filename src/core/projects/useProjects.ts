@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "../companies/CompanyContext";
-import { createProgram, createProject, listPrograms, listProjects, updateProject } from "./api";
+import { createProgram, createProject, listPrograms, listProjects, updateProgram, updateProject } from "./api";
 import type { Program, Project } from "./types";
 
 export function useProjects() {
@@ -37,5 +37,14 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: (project: Project) => updateProject(project),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", company.id] }),
+  });
+}
+
+export function useUpdateProgram() {
+  const { company } = useCompany();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (program: Program) => updateProgram(program),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["programs", company.id] }),
   });
 }
