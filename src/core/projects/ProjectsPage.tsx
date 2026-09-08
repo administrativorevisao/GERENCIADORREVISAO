@@ -3,16 +3,30 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { isAdmin } from "../../shared/auth/types";
 import { useTasks } from "../tasks/useTasks";
-import { usePrograms, useProjects } from "./useProjects";
+import { usePrograms, useProjects, useUpdateProject } from "./useProjects";
 import { ProgramModal } from "./ProgramModal";
 import { ProjectModal } from "./ProjectModal";
 import { ProjectImportModal } from "./ProjectImportModal";
 import { downloadProjectTemplate } from "./projectTemplate";
 import { PROJECT_STATUS_LABEL, type Program, type Project } from "./types";
 
-function ProjectCard({ project }: { project: Project }) {
+const DRAG_MIME = "application/x-revisao-project-id";
+
+function ProjectCard({ project, draggable, onDragStart, onDragEnd }: {
+  project: Project;
+  draggable: boolean;
+  onDragStart: (e: React.DragEvent, project: Project) => void;
+  onDragEnd: () => void;
+}) {
   return (
-    <Link to={`/projetos/${project.id}`} className="card card-pad" style={{ display: "block", color: "inherit" }}>
+    <Link
+      to={`/projetos/${project.id}`}
+      className="card card-pad"
+      style={{ display: "block", color: "inherit", cursor: draggable ? "grab" : undefined }}
+      draggable={draggable}
+      onDragStart={(e) => onDragStart(e, project)}
+      onDragEnd={onDragEnd}
+    >
       <div className="row" style={{ alignItems: "flex-start", gap: 8 }}>
         <b style={{ flex: 1 }}>{project.name}</b>
         <span className={`badge ${project.status === "done" ? "b-done" : "b-soft"}`} style={{ flex: "none" }}>
@@ -38,9 +52,12 @@ export function ProjectsPage() {
   const { data: programs, isLoading: loadingPrograms } = usePrograms();
   const { data: projects, isLoading: loadingProjects, refetch: refetchProjects } = useProjects();
   const { data: tasks } = useTasks();
+  const updateProject = useUpdateProject();
   const [newProgram, setNewProgram] = useState(false);
   const [newProjectIn, setNewProjectIn] = useState<Program | null>(null);
   const [importing, setImporting] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null); // programId, or "none"
 
   if (loadingPrograms || loadingProjects) return <div className="empty">Carregando projetos…</div>;
 
@@ -48,6 +65,30 @@ export function ProjectsPage() {
   const progs = programs ?? [];
   const projs = projects ?? [];
   const allTasks = tasks ?? [];
+
+  function handleDragStart(e: React.DragEvent, project: Project) {
+    e.dataTransfer.setData(DRAG_MIME, project.id);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingId(project.id);
+  }
+
+  function handleDrop(e: React.DragEvent, programId: string | null) {
+    e.preventDefault();
+    setDragOverTarget(null);
+    const projectId = e.dataTransfer.getData(DRAG_MIME) || draggingId;
+    setDraggingId(null);
+    if (!projectId) return;
+    const project = projs.find((p) => p.id === projectId);
+    if (!project || project.programId === programId) return;
+    updateProject.mutate({ ...project, programId });
+  }
+
+  function dropZoneProps(target: string) {
+    return {
+      onDragOver: (e: React.DragEvent) => { e.preventDefault(); setDragOverTarget(target); },
+      onDragLeave: () => setDragOverTarget((cur) => (cur === target ? null : cur)),
+    };
+  }
 
   return (
     <div>
@@ -78,8 +119,20 @@ export function ProjectsPage() {
 
       {progs.map((program) => {
         const { projects: progProjects, done, total, percent } = programProgress(program, projs, allTasks);
+        const isOver = dragOverTarget === program.id;
         return (
-          <div key={program.id} className="card card-pad" style={{ marginBottom: 14, borderLeft: `4px solid ${program.color}` }}>
+          <div
+            key={program.id}
+            className="card card-pad"
+            style={{
+              marginBottom: 14,
+              borderLeft: `4px solid ${program.color}`,
+              outline: isOver ? "2px dashed var(--accent, #6a5acd)" : undefined,
+              outlineOffset: isOver ? 2 : undefined,
+            }}
+            {...(admin ? dropZoneProps(program.id) : {})}
+            onDrop={admin ? (e) => handleDrop(e, program.id) : undefined}
+          >
             <div className="row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, display: "grid", placeItems: "center", fontSize: 22, background: `color-mix(in srgb, ${program.color} 16%, transparent)`, flex: "none" }}>
                 {program.icon}
@@ -100,8 +153,18 @@ export function ProjectsPage() {
               <span style={{ width: `${percent}%`, background: program.color }} />
             </div>
             <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", marginTop: 12 }}>
-              {progProjects.length === 0 && <div className="hint">Nenhum projeto neste programa ainda.</div>}
-              {progProjects.map((project) => <ProjectCard key={project.id} project={project} />)}
+              {progProjects.length === 0 && (
+                <div className="hint">{admin ? "Nenhum projeto neste programa ainda. Arraste um projeto até aqui para vinculá-lo." : "Nenhum projeto neste programa ainda."}</div>
+              )}
+              {progProjects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  draggable={admin}
+                  onDragStart={handleDragStart}
+                  onDragEnd={() => { setDraggingId(null); setDragOverTarget(null); }}
+                />
+              ))}
             </div>
           </div>
         );
@@ -109,9 +172,19 @@ export function ProjectsPage() {
 
       {(() => {
         const noProgram = projs.filter((p) => !p.programId);
-        if (noProgram.length === 0) return null;
+        const isOver = dragOverTarget === "none";
+        if (noProgram.length === 0 && !admin) return null;
         return (
-          <div className="card card-pad" style={{ marginBottom: 14 }}>
+          <div
+            className="card card-pad"
+            style={{
+              marginBottom: 14,
+              outline: isOver ? "2px dashed var(--accent, #6a5acd)" : undefined,
+              outlineOffset: isOver ? 2 : undefined,
+            }}
+            {...(admin ? dropZoneProps("none") : {})}
+            onDrop={admin ? (e) => handleDrop(e, null) : undefined}
+          >
             <div className="row" style={{ alignItems: "center", gap: 12 }}>
               <div className="stack">
                 <b style={{ fontSize: 16 }}>Sem programa</b>
@@ -120,7 +193,18 @@ export function ProjectsPage() {
               <div style={{ marginLeft: "auto" }} className="muted">{noProgram.length} projeto(s)</div>
             </div>
             <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", marginTop: 12 }}>
-              {noProgram.map((project) => <ProjectCard key={project.id} project={project} />)}
+              {noProgram.length === 0 && admin && (
+                <div className="hint">Arraste um projeto até aqui para remover o programa.</div>
+              )}
+              {noProgram.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  draggable={admin}
+                  onDragStart={handleDragStart}
+                  onDragEnd={() => { setDraggingId(null); setDragOverTarget(null); }}
+                />
+              ))}
             </div>
           </div>
         );
