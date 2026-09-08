@@ -19,11 +19,24 @@ function courseTypeFromLabel(v: unknown): CourseType | null {
   return hit?.[0] ?? null;
 }
 
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+// Além do rótulo exato usado no app ("Em andamento", "Concluído"...),
+// reconhece os valores como aparecem nas planilhas reais da empresa
+// (ex: a coluna "Status CURSO" usa só "ATIVO"/"CONCLUÍDO").
 function statusFromLabel(v: unknown): ProjectStatus | null {
-  const s = String(v || "").trim().toLowerCase();
+  const s = stripAccents(String(v || "").trim().toLowerCase());
   if (!s) return null;
-  const hit = (Object.entries(PROJECT_STATUS_LABEL) as [ProjectStatus, string][]).find(([, label]) => label.toLowerCase() === s);
-  return hit?.[0] ?? null;
+  const hit = (Object.entries(PROJECT_STATUS_LABEL) as [ProjectStatus, string][]).find(([, label]) => stripAccents(label.toLowerCase()) === s);
+  if (hit) return hit[0];
+  if (["ativo", "ativa", "em andamento"].includes(s)) return "active";
+  if (["concluido", "concluida", "finalizado", "finalizada", "encerrado"].includes(s)) return "done";
+  if (["pausado", "pausada", "em espera", "pendente"].includes(s)) return "hold";
+  if (["cancelado", "cancelada"].includes(s)) return "cancelled";
+  if (["planejamento", "planejado", "planejada"].includes(s)) return "planning";
+  return null;
 }
 
 function priorityFromLabel(v: unknown): Project["priority"] | null {
@@ -48,22 +61,27 @@ export async function applyProjectRows(
   const byName = new Map(existingProjects.map((p) => [p.name.trim().toLowerCase(), p]));
 
   for (const r of rows) {
-    const name = String(r["Nome"] || "").trim();
+    // Aceita tanto os nomes de coluna do modelo (Nome/Descrição/Início/Prazo/
+    // Responsável/Status) quanto os nomes reais já usados na planilha de
+    // controle de cursos da empresa (Nome do Curso/Observações/Início de
+    // Venda/Data da Prova/Coordenador/Status CURSO).
+    const name = String(r["Nome"] || r["Nome do Curso"] || "").trim();
     if (!name) { result.skipped++; continue; }
 
     const programName = String(r["Programa"] || "").trim().toLowerCase();
     const program = programName ? programs.find((p) => p.name.trim().toLowerCase() === programName) : undefined;
-    const owner = r["Responsável"] ? findUserByNameOrEmail(users, String(r["Responsável"])) : null;
+    const ownerName = r["Responsável"] || r["Coordenador"];
+    const owner = ownerName ? findUserByNameOrEmail(users, String(ownerName)) : null;
 
     const patch: Partial<Project> = {
       name,
-      description: String(r["Descrição"] || r["Descricao"] || "").trim(),
+      description: String(r["Descrição"] || r["Descricao"] || r["Observações"] || r["Observacoes"] || "").trim(),
       programId: program?.id ?? null,
       ownerId: owner?.id ?? null,
-      startDate: parseDateCell(r["Início"] || r["Inicio"]) ?? todayISO(),
-      dueDate: parseDateCell(r["Prazo"]) ?? todayISO(),
+      startDate: parseDateCell(r["Início"] || r["Inicio"] || r["Início de Venda"] || r["Inicio de Venda"]) ?? todayISO(),
+      dueDate: parseDateCell(r["Prazo"] || r["Data da Prova"] || r["Fim de Acesso"]) ?? todayISO(),
       priority: priorityFromLabel(r["Prioridade"]) ?? "medium",
-      status: statusFromLabel(r["Status"]) ?? "active",
+      status: statusFromLabel(r["Status"] || r["Status CURSO"] || r["Status Curso"]) ?? "active",
       courseType: courseTypeFromLabel(r["Tipo de curso"]),
     };
 

@@ -8,7 +8,21 @@ import { ProgramModal } from "./ProgramModal";
 import { ProjectModal } from "./ProjectModal";
 import { ProjectImportModal } from "./ProjectImportModal";
 import { downloadProjectTemplate } from "./projectTemplate";
-import type { Program, Project } from "./types";
+import { PROJECT_STATUS_LABEL, type Program, type Project } from "./types";
+
+function ProjectCard({ project }: { project: Project }) {
+  return (
+    <Link to={`/projetos/${project.id}`} className="card card-pad" style={{ display: "block", color: "inherit" }}>
+      <div className="row" style={{ alignItems: "flex-start", gap: 8 }}>
+        <b style={{ flex: 1 }}>{project.name}</b>
+        <span className={`badge ${project.status === "done" ? "b-done" : "b-soft"}`} style={{ flex: "none" }}>
+          {PROJECT_STATUS_LABEL[project.status]}
+        </span>
+      </div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{project.description || "Sem descrição"}</div>
+    </Link>
+  );
+}
 
 function programProgress(program: Program, projects: Project[], tasks: { status: string; projectId: string | null }[]) {
   const progProjects = projects.filter((p) => p.programId === program.id);
@@ -87,16 +101,30 @@ export function ProjectsPage() {
             </div>
             <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", marginTop: 12 }}>
               {progProjects.length === 0 && <div className="hint">Nenhum projeto neste programa ainda.</div>}
-              {progProjects.map((project) => (
-                <Link key={project.id} to={`/projetos/${project.id}`} className="card card-pad" style={{ display: "block", color: "inherit" }}>
-                  <b>{project.name}</b>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{project.description || "Sem descrição"}</div>
-                </Link>
-              ))}
+              {progProjects.map((project) => <ProjectCard key={project.id} project={project} />)}
             </div>
           </div>
         );
       })}
+
+      {(() => {
+        const noProgram = projs.filter((p) => !p.programId);
+        if (noProgram.length === 0) return null;
+        return (
+          <div className="card card-pad" style={{ marginBottom: 14 }}>
+            <div className="row" style={{ alignItems: "center", gap: 12 }}>
+              <div className="stack">
+                <b style={{ fontSize: 16 }}>Sem programa</b>
+                <span className="muted" style={{ fontSize: 12 }}>Projetos ainda não vinculados a um programa</span>
+              </div>
+              <div style={{ marginLeft: "auto" }} className="muted">{noProgram.length} projeto(s)</div>
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", marginTop: 12 }}>
+              {noProgram.map((project) => <ProjectCard key={project.id} project={project} />)}
+            </div>
+          </div>
+        );
+      })()}
 
       {newProgram && <ProgramModal onClose={() => setNewProgram(false)} />}
       {newProjectIn && (

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../../shared/auth/AuthContext";
+import { isAdmin } from "../../shared/auth/types";
 import { useTasks } from "../tasks/useTasks";
 import { userName, useUsers } from "../team/useUsers";
 import { useProjects, useUpdateProject } from "./useProjects";
-import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type KeyDate, type Project } from "./types";
+import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type KeyDate, type Project, type ProjectStatus } from "./types";
 import { COURSE_TYPE_LABEL, GUIA_TEMPLATES, type CourseType, type GuiaContent, type ScheduledMessage, type SectorLink } from "./guiaTemplates";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { STATUS_LABEL } from "../tasks/types";
@@ -24,10 +25,13 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { profile } = useAuth();
   const { data: projects, isLoading } = useProjects();
   const { data: tasks } = useTasks();
   const { data: users } = useUsers();
+  const updateProject = useUpdateProject();
   const [tab, setTab] = useState<Tab>("briefing");
+  const admin = isAdmin(profile);
 
   if (isLoading) return <div className="empty">Carregando…</div>;
 
@@ -52,7 +56,17 @@ export function ProjectDetailPage() {
           <b style={{ fontSize: 20 }}>{project.name}</b>
           <span className="muted" style={{ fontSize: 13 }}>{project.description || "Sem descrição"}</span>
         </div>
-        <span className="badge b-soft" style={{ marginLeft: "auto" }}>{PROJECT_STATUS_LABEL[project.status]}</span>
+        {admin ? (
+          <select
+            className="input" style={{ marginLeft: "auto", width: "auto", padding: "6px 10px", fontSize: 12.5 }}
+            value={project.status}
+            onChange={(e) => updateProject.mutate({ ...project, status: e.target.value as ProjectStatus })}
+          >
+            {Object.entries(PROJECT_STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        ) : (
+          <span className="badge b-soft" style={{ marginLeft: "auto" }}>{PROJECT_STATUS_LABEL[project.status]}</span>
+        )}
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 16, alignItems: "start" }}>
