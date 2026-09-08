@@ -31,7 +31,19 @@ export function ProjectDetailPage() {
   const { data: users } = useUsers();
   const updateProject = useUpdateProject();
   const [tab, setTab] = useState<Tab>("briefing");
+  const [copied, setCopied] = useState(false);
   const admin = isAdmin(profile);
+
+  async function handleShare() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard indisponível (ex: navegador sem permissão) — sem feedback de erro,
+      // o link continua visível na barra de endereço pra copiar manualmente.
+    }
+  }
 
   if (isLoading) return <div className="empty">Carregando…</div>;
 
@@ -56,16 +68,23 @@ export function ProjectDetailPage() {
           <b style={{ fontSize: 20 }}>{project.name}</b>
           <span className="muted" style={{ fontSize: 13 }}>{project.description || "Sem descrição"}</span>
         </div>
+        <button
+          className="btn sm ghost"
+          style={{ marginLeft: "auto" }}
+          onClick={handleShare}
+        >
+          <span className="msi">{copied ? "check" : "link"}</span> {copied ? "Link copiado!" : "Copiar link"}
+        </button>
         {admin ? (
           <select
-            className="input" style={{ marginLeft: "auto", width: "auto", padding: "6px 10px", fontSize: 12.5 }}
+            className="input" style={{ width: "auto", padding: "6px 10px", fontSize: 12.5 }}
             value={project.status}
             onChange={(e) => updateProject.mutate({ ...project, status: e.target.value as ProjectStatus })}
           >
             {Object.entries(PROJECT_STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         ) : (
-          <span className="badge b-soft" style={{ marginLeft: "auto" }}>{PROJECT_STATUS_LABEL[project.status]}</span>
+          <span className="badge b-soft">{PROJECT_STATUS_LABEL[project.status]}</span>
         )}
       </div>
 
