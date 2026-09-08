@@ -5,12 +5,18 @@ import { todayISO } from "../../shared/lib/dates";
 const PROJECTS_TABLE = "projects";
 const PROGRAMS_TABLE = "programs";
 
-export function listProjects(companyId: string) {
-  return listRows<Project>(PROJECTS_TABLE, companyId);
+// Projetos criados antes do recurso de subprogramas não têm esse campo
+// salvo — normaliza para null (equivalente a "sem concurso").
+export async function listProjects(companyId: string): Promise<Project[]> {
+  const rows = await listRows<Project>(PROJECTS_TABLE, companyId);
+  return rows.map((p) => ({ ...p, subProgramId: p.subProgramId ?? null }));
 }
 
-export function listPrograms(companyId: string) {
-  return listRows<Program>(PROGRAMS_TABLE, companyId);
+// Programas criados antes do recurso de subprogramas não têm esse campo
+// salvo — normaliza para [] pra não quebrar quem espera um array.
+export async function listPrograms(companyId: string): Promise<Program[]> {
+  const rows = await listRows<Program>(PROGRAMS_TABLE, companyId);
+  return rows.map((p) => ({ ...p, subPrograms: p.subPrograms ?? [] }));
 }
 
 export function createProgram(companyId: string, input: Partial<Program>) {
