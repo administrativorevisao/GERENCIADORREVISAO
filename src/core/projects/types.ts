@@ -35,12 +35,14 @@ export interface Course {
   linkConcurso: string;
   analiseEdital: string;
   disciplinas: string;
+  cronogramaCompleto: string;
   observacoes: string;
   coordenador: string;
   modalidades: string;
   inicioVendas: string;
   tempoAcesso: string;
   tipoCronograma: string;
+  estruturaCurso: string;
   duracaoSemanas: string;
   preco: string;
   parcelamento: string;
@@ -49,8 +51,8 @@ export interface Course {
 
 export const emptyCourse: Course = {
   orgaoEstado: "", cargoCarreira: "", vagas: "", remuneracao: "", banca: "", linkConcurso: "",
-  analiseEdital: "", disciplinas: "", observacoes: "", coordenador: "", modalidades: "",
-  inicioVendas: "", tempoAcesso: "", tipoCronograma: "", duracaoSemanas: "", preco: "",
+  analiseEdital: "", disciplinas: "", cronogramaCompleto: "", observacoes: "", coordenador: "", modalidades: "",
+  inicioVendas: "", tempoAcesso: "", tipoCronograma: "", estruturaCurso: "", duracaoSemanas: "", preco: "",
   parcelamento: "", condicoesComercialCs: "",
 };
 

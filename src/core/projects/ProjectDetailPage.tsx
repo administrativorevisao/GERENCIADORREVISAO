@@ -15,7 +15,7 @@ import { useGoogleImport } from "../../shared/lib/useGoogleImport";
 type Tab = "briefing" | "edital" | "course" | "guias" | "dates" | "links" | "tasks";
 const TABS: { id: Tab; label: string }[] = [
   { id: "briefing", label: "Briefing" },
-  { id: "edital", label: "Edital" },
+  { id: "edital", label: "Concurso" },
   { id: "course", label: "Curso" },
   { id: "guias", label: "Guias por setor" },
   { id: "dates", label: "Datas-chave" },
@@ -182,8 +182,8 @@ function BriefingTab({ project }: { project: Project }) {
 
 const COURSE_FIELD_GROUPS: Record<"edital" | "course", { title: string; intro: string; fields: { key: keyof Course; label: string }[] }> = {
   edital: {
-    title: "Edital",
-    intro: "Informações gerais do edital — a fonte única para todos os setores não ficarem se perguntando.",
+    title: "Concurso",
+    intro: "Informações gerais do concurso — a fonte única para todos os setores não ficarem se perguntando.",
     fields: [
       { key: "orgaoEstado", label: "Órgão / Estado" },
       { key: "cargoCarreira", label: "Cargo / Carreira" },
@@ -193,7 +193,7 @@ const COURSE_FIELD_GROUPS: Record<"edital" | "course", { title: string; intro: s
       { key: "linkConcurso", label: "Link do concurso" },
       { key: "disciplinas", label: "Disciplinas" },
       { key: "analiseEdital", label: "Análise do edital" },
-      { key: "observacoes", label: "Observações" },
+      { key: "cronogramaCompleto", label: "Cronograma completo do curso" },
     ],
   },
   course: {
@@ -205,14 +205,15 @@ const COURSE_FIELD_GROUPS: Record<"edital" | "course", { title: string; intro: s
       { key: "inicioVendas", label: "Início das vendas" },
       { key: "tempoAcesso", label: "Tempo de acesso" },
       { key: "tipoCronograma", label: "Tipo de cronograma" },
-      { key: "duracaoSemanas", label: "Duração (semanas)" },
+      { key: "estruturaCurso", label: "Estrutura do curso (Legproc, videoaulas — conforme modelo já enviado)" },
+      { key: "duracaoSemanas", label: "Duração" },
       { key: "preco", label: "Preço" },
       { key: "parcelamento", label: "Parcelamento" },
       { key: "condicoesComercialCs", label: "Condições comercial/CS" },
     ],
   },
 };
-const LONG_FIELDS = new Set<keyof Course>(["analiseEdital", "observacoes", "disciplinas"]);
+const LONG_FIELDS = new Set<keyof Course>(["analiseEdital", "cronogramaCompleto", "estruturaCurso", "observacoes", "disciplinas"]);
 
 function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital" | "course" }) {
   const updateProject = useUpdateProject();
