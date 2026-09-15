@@ -217,10 +217,17 @@ const LONG_FIELDS = new Set<keyof Course>(["analiseEdital", "cronogramaCompleto"
 
 function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital" | "course" }) {
   const updateProject = useUpdateProject();
+  const { pickDocument, docTextFromId, extractFileId } = useGoogleImport();
   const [draft, setDraft] = useState<Course | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const course = draft ?? project.course ?? emptyCourse;
   const changed = draft !== null;
   const group = COURSE_FIELD_GROUPS[groupKey];
+  const longFieldsInGroup = group.fields.filter((f) => LONG_FIELDS.has(f.key));
+  const [importTarget, setImportTarget] = useState<keyof Course>(
+    () => (longFieldsInGroup.find((f) => f.key === "analiseEdital") ?? longFieldsInGroup[0])?.key ?? "analiseEdital",
+  );
 
   function setField(key: keyof Course, value: string) {
     setDraft({ ...course, [key]: value });
@@ -231,9 +238,41 @@ function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital"
     setDraft(null);
   }
 
+  async function importDocument() {
+    setImportError(null);
+    setImporting(true);
+    try {
+      const picked = await pickDocument();
+      if (!picked) return;
+      const fileId = extractFileId(picked.url) ?? picked.id;
+      const text = await docTextFromId(fileId);
+      setField(importTarget, text);
+    } catch (e) {
+      setImportError((e as Error).message || "Não foi possível importar o documento.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div>
       <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>{group.intro}</p>
+      {longFieldsInGroup.length > 0 && (
+        <div className="row" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+          <button className="btn sm ghost" onClick={importDocument} disabled={importing}>
+            <span className="msi">folder_open</span> {importing ? "Abrindo o Drive…" : "Importar do Google Doc"}
+          </button>
+          <span className="muted" style={{ fontSize: 12 }}>para</span>
+          <select
+            className="input" style={{ width: "auto", padding: "4px 8px", fontSize: 12.5 }}
+            value={importTarget}
+            onChange={(e) => setImportTarget(e.target.value as keyof Course)}
+          >
+            {longFieldsInGroup.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+          </select>
+        </div>
+      )}
+      {importError && <p className="hint" style={{ color: "var(--danger, #d33)" }}>{importError}</p>}
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
         {group.fields.map((f) => (
           <div className="field" key={f.key} style={{ margin: 0 }}>
