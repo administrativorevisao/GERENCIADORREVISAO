@@ -37,6 +37,7 @@ export interface FinanceTxn {
   accountId: string | null;
   dreGroup: DreGroup;
   category: string;
+  detail: string;
   departmentId: string | null;
   counterparty: string;
   description: string;

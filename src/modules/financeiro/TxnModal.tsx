@@ -18,6 +18,7 @@ export function TxnModal({ txn, onClose }: { txn: FinanceTxn | null; onClose: ()
   const [accountId, setAccountId] = useState(txn?.accountId ?? "");
   const [dreGroup, setDreGroup] = useState<DreGroup>(txn?.dreGroup ?? "despesasOperacionais");
   const [category, setCategory] = useState(txn?.category ?? "");
+  const [detail, setDetail] = useState(txn?.detail ?? "");
   const [competenceMonth, setCompetenceMonth] = useState(txn?.competenceMonth ?? todayISO().slice(0, 7));
 
   const saving = createTxn.isPending || updateTxn.isPending;
@@ -27,7 +28,7 @@ export function TxnModal({ txn, onClose }: { txn: FinanceTxn | null; onClose: ()
     const patch: Partial<FinanceTxn> = {
       type, description: description.trim(), counterparty, amount: Number(amount) || 0, status,
       dueDate, paidDate: status === "pago" ? (paidDate || todayISO()) : null,
-      accountId: accountId || null, dreGroup, category, competenceMonth,
+      accountId: accountId || null, dreGroup, category, detail, competenceMonth,
     };
     if (txn) await updateTxn.mutateAsync({ ...txn, ...patch });
     else await createTxn.mutateAsync(patch);
@@ -99,9 +100,13 @@ export function TxnModal({ txn, onClose }: { txn: FinanceTxn | null; onClose: ()
               </select>
             </div>
             <div className="field">
-              <label htmlFor="fx-category">Categoria</label>
+              <label htmlFor="fx-category">Categoria Revisão</label>
               <input id="fx-category" className="input" value={category} onChange={(e) => setCategory(e.target.value)} />
             </div>
+          </div>
+          <div className="field">
+            <label htmlFor="fx-detail">Detalhamento</label>
+            <input id="fx-detail" className="input" value={detail} onChange={(e) => setDetail(e.target.value)} />
           </div>
         </div>
         <div className="modal-foot">

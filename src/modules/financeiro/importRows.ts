@@ -67,7 +67,7 @@ export async function applyFinanceRows(
       const signed = parseMoneyCell(r["Valor"]);
       if (signed == null || signed === 0) continue;
       const amount = Math.abs(signed);
-      let type: "receita" | "despesa", status: "pago" | "pendente", accName: string, category: string,
+      let type: "receita" | "despesa", status: "pago" | "pendente", accName: string, category: string, detail: string,
         description: string, due: string, paidDate: string | null, competenceMonth: string, dreGroup: ReturnType<typeof dreGroupFromCentroCusto>;
       if (isLedgerFormat(r)) {
         type = signed < 0 ? "despesa" : "receita";
@@ -75,7 +75,8 @@ export async function applyFinanceRows(
         status = paidRaw ? "pago" : "pendente";
         accName = String(r["Banco"] || "").trim();
         category = String(r["Categoria Revisão"] || r["Categoria (Centro de custo)"] || "").trim();
-        description = [r["Descrição"], r["Detalhamento"]].filter(Boolean).join(" — ");
+        detail = String(r["Detalhamento"] || "").trim();
+        description = String(r["Descrição"] || "");
         const comp = parseDateCell(r["Data de Competência"]);
         due = paidRaw || comp || todayISO();
         paidDate = paidRaw;
@@ -88,6 +89,7 @@ export async function applyFinanceRows(
         status = /pago|paga/.test(statusRaw) ? "pago" : "pendente";
         accName = String(r["Conta"] || "").trim();
         category = String(r["Categoria"] || "");
+        detail = "";
         description = String(r["Descrição"] || r["Descricao"] || "");
         due = parseDateCell(r["Vencimento"]) || todayISO();
         paidDate = status === "pago" ? parseDateCell(r["Data pagamento"]) || due : null;
@@ -96,7 +98,7 @@ export async function applyFinanceRows(
       }
       const accountId = await accountIdByName(accName);
       await api.createTxn(companyId, {
-        type, amount, status, accountId, category, description,
+        type, amount, status, accountId, category, detail, description,
         counterparty: String(r["Contraparte"] || ""), dueDate: due, paidDate, competenceMonth, dreGroup,
         ...extra,
       });

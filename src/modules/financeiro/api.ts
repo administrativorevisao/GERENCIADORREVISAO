@@ -21,7 +21,7 @@ export function createTxn(companyId: string, input: Partial<FinanceTxn>) {
   const txn: FinanceTxn = {
     id: newId("fx"), type: "despesa", status: "pendente", dueDate: todayISO(), paidDate: null,
     competenceMonth: todayISO().slice(0, 7), amount: 0, accountId: null, dreGroup: "despesasOperacionais",
-    category: "", departmentId: null, counterparty: "", description: "", projectId: null,
+    category: "", detail: "", departmentId: null, counterparty: "", description: "", projectId: null,
     sourceType: "manual", sourceId: null, notes: "", createdAt: now, updatedAt: now, ...input,
   };
   return createRow(T.txns, companyId, txn);
