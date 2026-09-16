@@ -29,6 +29,9 @@ export function PayableModal({ txn, onClose }: { txn: FinanceTxn | null; onClose
   const [dreGroup, setDreGroup] = useState<DreGroup>(txn?.dreGroup ?? "despesasOperacionais");
   const [category, setCategory] = useState(txn?.category ?? "");
   const [isFixed, setIsFixed] = useState(txn?.isFixed ?? false);
+  // Padrão pra conta fixa nova: pré-aprovada (assinatura); só exige
+  // aprovação sempre se marcado explicitamente (ex: aluguel).
+  const [requiresApproval, setRequiresApproval] = useState(txn?.requiresApproval ?? false);
   const [notes, setNotes] = useState(txn?.notes ?? "");
   const [accountId, setAccountId] = useState(txn?.accountId ?? "");
 
@@ -36,15 +39,26 @@ export function PayableModal({ txn, onClose }: { txn: FinanceTxn | null; onClose
   const approvalStatus: ApprovalStatus = txn?.approvalStatus ?? "pendente";
   const canPay = !txn || approvalStatus === "aprovado";
 
+  // Despesa variável sempre exige aprovação — só uma despesa fixa pode virar
+  // assinatura pré-aprovada (desmarcando a caixinha abaixo).
+  const effectiveRequiresApproval = !isFixed || requiresApproval;
+
   async function handleSave() {
     if (!description.trim()) return;
     const patch: Partial<FinanceTxn> = {
       type: "despesa", description: description.trim(), counterparty, amount: Number(amount) || 0,
-      dueDate, departmentId: departmentId || null, dreGroup, category, isFixed, notes,
+      dueDate, departmentId: departmentId || null, dreGroup, category, isFixed,
+      requiresApproval: effectiveRequiresApproval, notes,
       accountId: accountId || null, competenceMonth: dueDate.slice(0, 7),
     };
     if (txn) await updateTxn.mutateAsync({ ...txn, ...patch });
-    else await createTxn.mutateAsync({ ...patch, status: "pendente", approvalStatus: "pendente" });
+    else {
+      await createTxn.mutateAsync({
+        ...patch,
+        status: "pendente",
+        approvalStatus: effectiveRequiresApproval ? "pendente" : "aprovado",
+      });
+    }
     onClose();
   }
 
@@ -138,6 +152,14 @@ export function PayableModal({ txn, onClose }: { txn: FinanceTxn | null; onClose
             <input type="checkbox" checked={isFixed} onChange={(e) => setIsFixed(e.target.checked)} />
             <span>Despesa fixa (recorrente todo mês)</span>
           </label>
+          {isFixed && (
+            <label className="row" style={{ alignItems: "center", gap: 8, cursor: "pointer", marginTop: 6, marginLeft: 22 }}>
+              <input type="checkbox" checked={requiresApproval} onChange={(e) => setRequiresApproval(e.target.checked)} />
+              <span className="muted" style={{ fontSize: 12.5 }}>
+                Sempre exigir aprovação do CEO (ex: aluguel) — desmarcado = assinatura recorrente pré-aprovada (ex: SaaS)
+              </span>
+            </label>
+          )}
           <div className="field">
             <label htmlFor="pay-notes">Observações</label>
             <textarea id="pay-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Qualquer observação livre sobre esta conta." />

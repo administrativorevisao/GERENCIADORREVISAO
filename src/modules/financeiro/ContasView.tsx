@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { isAdmin } from "../../shared/auth/types";
 import { STANDARD_DEPARTMENTS } from "../../core/companies/companies";
-import { dueStatus, fmtDate } from "../../shared/lib/dates";
+import { dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
 import { fmtMoney } from "../../shared/lib/money";
 import { useTxns, useUpdateTxn } from "./useFinance";
 import { APPROVAL_STATUS_LABEL, DRE_GROUPS, type FinanceTxn } from "./types";
@@ -11,6 +11,12 @@ import { TxnModal } from "./TxnModal";
 
 function deptName(id: string | null) {
   return STANDARD_DEPARTMENTS.find((d) => d.id === id)?.name ?? "—";
+}
+
+function monthLabel(ym: string) {
+  const [y, m] = ym.split("-");
+  const names = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  return `${names[Number(m) - 1]}/${y}`;
 }
 
 export function ContasView() {
@@ -23,7 +29,7 @@ export function ContasView() {
   const [editingReceivable, setEditingReceivable] = useState<FinanceTxn | null>(null);
   const [deptFilter, setDeptFilter] = useState("");
   const [dreFilter, setDreFilter] = useState("");
-  const [fixedFilter, setFixedFilter] = useState<"" | "fixo" | "variavel">("");
+  const [monthFilter, setMonthFilter] = useState("");
   const [paidFilter, setPaidFilter] = useState<"" | "pago" | "naoPago">("");
 
   if (isLoading) return <div className="empty">Carregando…</div>;
@@ -34,18 +40,36 @@ export function ContasView() {
   const fixedActive = despesas.filter((t) => t.isFixed && t.status !== "pago");
   const fixedTotal = fixedActive.reduce((sum, t) => sum + t.amount, 0);
 
-  const payables = despesas
+  const filtered = despesas
     .filter((t) => !deptFilter || t.departmentId === deptFilter)
     .filter((t) => !dreFilter || t.dreGroup === dreFilter)
-    .filter((t) => !fixedFilter || (fixedFilter === "fixo" ? t.isFixed : !t.isFixed))
+    .filter((t) => !monthFilter || t.dueDate.slice(0, 7) === monthFilter)
     .filter((t) => !paidFilter || (paidFilter === "pago" ? t.status === "pago" : t.status !== "pago"))
     .slice()
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  const fixedNeedsApproval = filtered.filter((t) => t.isFixed && t.requiresApproval);
+  const subscriptions = filtered.filter((t) => t.isFixed && !t.requiresApproval);
+  const variable = filtered.filter((t) => !t.isFixed);
 
   const receivables = all
     .filter((t) => t.type === "receita" && t.status !== "pago" && t.status !== "cancelado")
     .slice()
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  // Fluxo de caixa futuro: tudo que ainda não foi pago, agrupado por mês de
+  // vencimento — dá pra ver o que está comprometido (já aprovado) e o que
+  // ainda depende de aprovação em cada mês à frente.
+  const upcoming = despesas.filter((t) => t.status !== "pago" && t.dueDate >= todayISO().slice(0, 7) + "-01");
+  const byMonth = new Map<string, { approved: number; pending: number }>();
+  upcoming.forEach((t) => {
+    const ym = t.dueDate.slice(0, 7);
+    const entry = byMonth.get(ym) ?? { approved: 0, pending: 0 };
+    if (t.approvalStatus === "aprovado") entry.approved += t.amount;
+    else if (t.approvalStatus === "pendente") entry.pending += t.amount;
+    byMonth.set(ym, entry);
+  });
+  const months = Array.from(byMonth.keys()).sort();
 
   async function quickApprove(t: FinanceTxn) {
     if (!profile) return;
@@ -54,6 +78,47 @@ export function ContasView() {
   async function quickReject(t: FinanceTxn) {
     if (!profile) return;
     await updateTxn.mutateAsync({ ...t, approvalStatus: "rejeitado", approvedBy: profile.id, approvedAt: new Date().toISOString() });
+  }
+
+  function payablesTable(title: string, rows: FinanceTxn[], emptyHint: string) {
+    return (
+      <div className="card card-pad" style={{ marginBottom: 14 }}>
+        <div className="section-title" style={{ marginTop: 0 }}>{title} <span className="count">{rows.length}</span></div>
+        {rows.length === 0 && <div className="hint">{emptyHint}</div>}
+        {rows.length > 0 && (
+          <div className="tbl-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Descrição</th><th>Setor</th><th>Grupo DRE</th><th>Vencimento</th>
+                  <th>Valor</th><th>Aprovação</th><th>Pagamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((t) => (
+                  <tr key={t.id} onClick={() => setEditing(t)} style={{ cursor: "pointer" }}>
+                    <td>
+                      <b>{t.description}</b>
+                      {t.notes && <div className="muted" style={{ fontSize: 11 }}>{t.notes}</div>}
+                    </td>
+                    <td>{deptName(t.departmentId)}</td>
+                    <td>{DRE_GROUPS[t.dreGroup]}</td>
+                    <td><span className={`badge b-${dueStatus(t.dueDate, t.status === "pago" ? "done" : "todo")}`}>{fmtDate(t.dueDate)}</span></td>
+                    <td>{fmtMoney(t.amount)}</td>
+                    <td>
+                      <span className={`badge ${t.approvalStatus === "aprovado" ? "b-done" : t.approvalStatus === "rejeitado" ? "b-high" : "b-soft"}`}>
+                        {APPROVAL_STATUS_LABEL[t.approvalStatus]}
+                      </span>
+                    </td>
+                    <td><span className={`badge ${t.status === "pago" ? "b-done" : "b-soft"}`}>{t.status === "pago" ? "Pago" : "Não pago"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -78,6 +143,7 @@ export function ContasView() {
                   <b style={{ fontSize: 13.5 }}>{t.description}</b>
                   <span className="muted" style={{ fontSize: 11.5 }}>
                     {t.counterparty || "—"} · {deptName(t.departmentId)} · vence {fmtDate(t.dueDate)}
+                    {t.isFixed && " · fixa"}
                   </span>
                 </div>
                 <b>{fmtMoney(t.amount)}</b>
@@ -97,6 +163,7 @@ export function ContasView() {
             <b style={{ fontSize: 18 }}>{fixedActive.length} · {fmtMoney(fixedTotal)}/mês</b>
           </div>
           <span style={{ flex: 1 }} />
+          <input type="month" className="input" style={{ width: "auto" }} value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
           <select className="input" style={{ width: "auto" }} value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
             <option value="">Setor: todos</option>
             {STANDARD_DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -104,11 +171,6 @@ export function ContasView() {
           <select className="input" style={{ width: "auto" }} value={dreFilter} onChange={(e) => setDreFilter(e.target.value)}>
             <option value="">Grupo DRE: todos</option>
             {Object.entries(DRE_GROUPS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <select className="input" style={{ width: "auto" }} value={fixedFilter} onChange={(e) => setFixedFilter(e.target.value as typeof fixedFilter)}>
-            <option value="">Fixo/variável: todos</option>
-            <option value="fixo">Só fixas</option>
-            <option value="variavel">Só variáveis</option>
           </select>
           <select className="input" style={{ width: "auto" }} value={paidFilter} onChange={(e) => setPaidFilter(e.target.value as typeof paidFilter)}>
             <option value="">Pagamento: todos</option>
@@ -118,38 +180,29 @@ export function ContasView() {
         </div>
       </div>
 
+      {payablesTable("Contas fixas sujeitas a aprovação", fixedNeedsApproval, "Nenhuma conta fixa que sempre exige aprovação (ex: aluguel).")}
+      {payablesTable("Assinaturas recorrentes", subscriptions, "Nenhuma assinatura recorrente cadastrada.")}
+      {payablesTable("Contas variáveis", variable, "Nenhuma conta variável com esses filtros.")}
+
       <div className="card card-pad" style={{ marginBottom: 14 }}>
-        <div className="section-title" style={{ marginTop: 0 }}>A pagar <span className="count">{payables.length}</span></div>
-        {payables.length === 0 && <div className="hint">Nada encontrado com esses filtros.</div>}
-        {payables.length > 0 && (
+        <div className="section-title" style={{ marginTop: 0 }}>Fluxo de caixa futuro (despesas ainda não pagas)</div>
+        {months.length === 0 && <div className="hint">Nada pendente pra frente.</div>}
+        {months.length > 0 && (
           <div className="tbl-wrap">
             <table className="data">
-              <thead>
-                <tr>
-                  <th>Descrição</th><th>Setor</th><th>Grupo DRE</th><th>Fixo</th><th>Vencimento</th>
-                  <th>Valor</th><th>Aprovação</th><th>Pagamento</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Mês</th><th>Aprovado (a pagar)</th><th>Aguardando aprovação</th><th>Total previsto</th></tr></thead>
               <tbody>
-                {payables.map((t) => (
-                  <tr key={t.id} onClick={() => setEditing(t)} style={{ cursor: "pointer" }}>
-                    <td>
-                      <b>{t.description}</b>
-                      {t.notes && <div className="muted" style={{ fontSize: 11 }}>{t.notes}</div>}
-                    </td>
-                    <td>{deptName(t.departmentId)}</td>
-                    <td>{DRE_GROUPS[t.dreGroup]}</td>
-                    <td>{t.isFixed ? <span className="badge b-soft">Fixo</span> : ""}</td>
-                    <td><span className={`badge b-${dueStatus(t.dueDate, t.status === "pago" ? "done" : "todo")}`}>{fmtDate(t.dueDate)}</span></td>
-                    <td>{fmtMoney(t.amount)}</td>
-                    <td>
-                      <span className={`badge ${t.approvalStatus === "aprovado" ? "b-done" : t.approvalStatus === "rejeitado" ? "b-high" : "b-soft"}`}>
-                        {APPROVAL_STATUS_LABEL[t.approvalStatus]}
-                      </span>
-                    </td>
-                    <td><span className={`badge ${t.status === "pago" ? "b-done" : "b-soft"}`}>{t.status === "pago" ? "Pago" : "Não pago"}</span></td>
-                  </tr>
-                ))}
+                {months.map((ym) => {
+                  const e = byMonth.get(ym)!;
+                  return (
+                    <tr key={ym}>
+                      <td><b>{monthLabel(ym)}</b></td>
+                      <td>{fmtMoney(e.approved)}</td>
+                      <td className={e.pending > 0 ? "muted" : undefined}>{fmtMoney(e.pending)}</td>
+                      <td><b>{fmtMoney(e.approved + e.pending)}</b></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

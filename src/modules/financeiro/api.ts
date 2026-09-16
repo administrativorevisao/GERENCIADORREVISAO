@@ -14,7 +14,13 @@ const T = {
 };
 
 // ---- Lançamentos (ledger) ----
-export const listTxns = (companyId: string) => listRows<FinanceTxn>(T.txns, companyId);
+// Lançamentos criados antes do fluxo de aprovação não têm requiresApproval
+// salvo — normaliza pra true (mais seguro: cai como "sujeita a aprovação"
+// em vez de ser tratada silenciosamente como assinatura pré-aprovada).
+export async function listTxns(companyId: string): Promise<FinanceTxn[]> {
+  const rows = await listRows<FinanceTxn>(T.txns, companyId);
+  return rows.map((t) => ({ ...t, requiresApproval: t.requiresApproval ?? true }));
+}
 
 export function createTxn(companyId: string, input: Partial<FinanceTxn>) {
   const now = new Date().toISOString();
@@ -22,7 +28,7 @@ export function createTxn(companyId: string, input: Partial<FinanceTxn>) {
     id: newId("fx"), type: "despesa", status: "pendente", dueDate: todayISO(), paidDate: null,
     competenceMonth: todayISO().slice(0, 7), amount: 0, accountId: null, dreGroup: "despesasOperacionais",
     category: "", detail: "", departmentId: null, counterparty: "", description: "", projectId: null,
-    isFixed: false, approvalStatus: "aprovado", approvedBy: null, approvedAt: null,
+    isFixed: false, requiresApproval: true, approvalStatus: "aprovado", approvedBy: null, approvedAt: null,
     sourceType: "manual", sourceId: null, notes: "", createdAt: now, updatedAt: now, ...input,
   };
   return createRow(T.txns, companyId, txn);

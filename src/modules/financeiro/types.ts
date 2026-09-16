@@ -54,6 +54,12 @@ export interface FinanceTxn {
   description: string;
   projectId: string | null;
   isFixed: boolean;
+  // Só relevante quando isFixed=true: separa assinaturas recorrentes de
+  // baixo risco (ex: SaaS — pré-aprovadas, não passam pelo Terminal) de
+  // contas fixas mensais maiores (ex: aluguel) que devem sempre ser
+  // aprovadas de novo a cada mês. Despesas variáveis (isFixed=false)
+  // sempre exigem aprovação, independente deste campo.
+  requiresApproval: boolean;
   approvalStatus: ApprovalStatus;
   approvedBy: string | null;
   approvedAt: string | null;
