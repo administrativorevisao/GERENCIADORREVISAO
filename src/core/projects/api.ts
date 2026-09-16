@@ -5,11 +5,11 @@ import { todayISO } from "../../shared/lib/dates";
 const PROJECTS_TABLE = "projects";
 const PROGRAMS_TABLE = "programs";
 
-// Projetos criados antes do recurso de subprogramas não têm esse campo
-// salvo — normaliza para null (equivalente a "sem concurso").
+// Projetos criados antes dos recursos de subprogramas/documentos não têm
+// esses campos salvos — normaliza pra não quebrar quem espera o formato novo.
 export async function listProjects(companyId: string): Promise<Project[]> {
   const rows = await listRows<Project>(PROJECTS_TABLE, companyId);
-  return rows.map((p) => ({ ...p, subProgramId: p.subProgramId ?? null }));
+  return rows.map((p) => ({ ...p, subProgramId: p.subProgramId ?? null, documents: p.documents ?? [] }));
 }
 
 // Programas criados antes do recurso de subprogramas não têm esse campo
@@ -60,6 +60,7 @@ export function createProject(companyId: string, input: Partial<Project>) {
     guias: [],
     scheduledMessages: [],
     sectorLinks: [],
+    documents: [],
     ...input,
   };
   return createRow(PROJECTS_TABLE, companyId, project);

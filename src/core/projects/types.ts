@@ -78,6 +78,17 @@ export interface Project {
   guias: GuiaContent[];
   scheduledMessages: ScheduledMessage[];
   sectorLinks: SectorLink[];
+  documents: ProjectDocument[];
+}
+
+// Arquivo anexado ao projeto (Doc, PDF, planilha, o que for) — guarda só o
+// link do Drive, sem extrair conteúdo. Diferente de Briefing.content
+// (texto puro colado/importado) — isso é o arquivo original em si.
+export interface ProjectDocument {
+  id: string;
+  name: string;
+  url: string;
+  addedAt: string;
 }
 
 export const PROGRAM_COLORS = [

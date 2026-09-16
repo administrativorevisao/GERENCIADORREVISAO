@@ -12,7 +12,7 @@
 // for escolhido — não à conta inteira.
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.file";
 
-export type DrivePickerKind = "spreadsheets" | "documents";
+export type DrivePickerKind = "spreadsheets" | "documents" | "files";
 
 declare global {
   interface Window {
@@ -28,7 +28,7 @@ declare global {
       };
       picker?: {
         Action: { PICKED: string; CANCEL: string };
-        ViewId: { SPREADSHEETS: string; DOCUMENTS: string };
+        ViewId: { SPREADSHEETS: string; DOCUMENTS: string; DOCS: string };
         DocsView: new (viewId: string) => PickerDocsView;
         PickerBuilder: new () => PickerBuilder;
       };
@@ -95,8 +95,15 @@ export async function openDrivePicker(
 ): Promise<{ id: string; name: string; url: string } | null> {
   if (!apiKey) throw new Error("Configure a Chave de API do Google em Administração antes de usar o seletor do Drive.");
   await ensureGooglePickerLib();
-  const viewId = kind === "documents" ? window.google!.picker!.ViewId.DOCUMENTS : window.google!.picker!.ViewId.SPREADSHEETS;
-  const defaultUrlPrefix = kind === "documents" ? "https://docs.google.com/document/d/" : "https://docs.google.com/spreadsheets/d/";
+  const viewId = kind === "documents" ? window.google!.picker!.ViewId.DOCUMENTS
+    : kind === "files" ? window.google!.picker!.ViewId.DOCS
+    : window.google!.picker!.ViewId.SPREADSHEETS;
+  const defaultUrlPrefix = kind === "documents" ? "https://docs.google.com/document/d/"
+    : kind === "files" ? "https://drive.google.com/file/d/"
+    : "https://docs.google.com/spreadsheets/d/";
+  const title = kind === "documents" ? "Escolha o documento no Google Drive"
+    : kind === "files" ? "Escolha o arquivo no Google Drive"
+    : "Escolha a planilha no Google Drive";
   return new Promise((resolve, reject) => {
     try {
       const view = new window.google!.picker!.DocsView(viewId).setIncludeFolders(true);
@@ -104,7 +111,7 @@ export async function openDrivePicker(
         .addView(view)
         .setOAuthToken(accessToken)
         .setDeveloperKey(apiKey)
-        .setTitle(kind === "documents" ? "Escolha o documento no Google Drive" : "Escolha a planilha no Google Drive")
+        .setTitle(title)
         .setCallback((data: PickerResponse) => {
           if (data.action === window.google!.picker!.Action.PICKED) {
             const doc = data.docs?.[0];

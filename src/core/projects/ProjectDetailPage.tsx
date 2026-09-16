@@ -5,14 +5,15 @@ import { isAdmin } from "../../shared/auth/types";
 import { useTasks } from "../tasks/useTasks";
 import { userName, useUsers } from "../team/useUsers";
 import { useProjects, useUpdateProject } from "./useProjects";
-import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type KeyDate, type Project, type ProjectStatus } from "./types";
+import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type KeyDate, type Project, type ProjectDocument, type ProjectStatus } from "./types";
 import { COURSE_TYPE_LABEL, GUIA_TEMPLATES, type CourseType, type GuiaContent, type ScheduledMessage, type SectorLink } from "./guiaTemplates";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { STATUS_LABEL } from "../tasks/types";
 import { dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
+import { newId } from "../../shared/lib/jsonStore";
 import { useGoogleImport } from "../../shared/lib/useGoogleImport";
 
-type Tab = "briefing" | "edital" | "course" | "guias" | "dates" | "links" | "tasks";
+type Tab = "briefing" | "edital" | "course" | "guias" | "dates" | "links" | "documents" | "tasks";
 const TABS: { id: Tab; label: string }[] = [
   { id: "briefing", label: "Briefing" },
   { id: "edital", label: "Concurso" },
@@ -20,6 +21,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "guias", label: "Guias por setor" },
   { id: "dates", label: "Datas-chave" },
   { id: "links", label: "Links" },
+  { id: "documents", label: "Documentos" },
   { id: "tasks", label: "Tarefas" },
 ];
 
@@ -101,6 +103,7 @@ export function ProjectDetailPage() {
           {tab === "guias" && <GuiasTab project={project} />}
           {tab === "dates" && <KeyDatesTab project={project} />}
           {tab === "links" && <LinksTab project={project} />}
+          {tab === "documents" && <DocumentsTab project={project} />}
           {tab === "tasks" && <TasksTab tasks={projectTasks} users={users} />}
         </div>
 
@@ -519,6 +522,58 @@ function LinksTab({ project }: { project: Project }) {
         );
       })}
       {links.length === 0 && <div className="hint">Nenhum link cadastrado ainda.</div>}
+    </div>
+  );
+}
+
+// Anexa o arquivo em si (link do Drive) ao projeto — diferente da aba
+// Briefing, que importa o texto pra dentro de um campo. Aqui o documento
+// original fica sempre acessível, e vários arquivos podem ficar anexados.
+function DocumentsTab({ project }: { project: Project }) {
+  const updateProject = useUpdateProject();
+  const { pickAnyFile } = useGoogleImport();
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const documents = project.documents ?? [];
+
+  async function addDocument() {
+    setError(null);
+    setImporting(true);
+    try {
+      const picked = await pickAnyFile();
+      if (!picked) return;
+      const doc: ProjectDocument = { id: newId("doc"), name: picked.name, url: picked.url, addedAt: new Date().toISOString() };
+      await updateProject.mutateAsync({ ...project, documents: [...documents, doc] });
+    } catch (e) {
+      setError((e as Error).message || "Não foi possível abrir o seletor do Drive.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function removeDocument(id: string) {
+    await updateProject.mutateAsync({ ...project, documents: documents.filter((d) => d.id !== id) });
+  }
+
+  return (
+    <div>
+      <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+        Arquivos do projeto (edital em PDF, planilhas, docs...) — anexa o link do Drive, sem alterar o arquivo original.
+      </p>
+      <div className="row" style={{ marginBottom: 12 }}>
+        <button className="btn sm ghost" onClick={addDocument} disabled={importing}>
+          <span className="msi">folder_open</span> {importing ? "Abrindo o Drive…" : "Importar do Drive"}
+        </button>
+      </div>
+      {error && <p className="hint" style={{ color: "var(--danger, #d33)" }}>{error}</p>}
+      {documents.length === 0 && <div className="hint">Nenhum documento anexado ainda.</div>}
+      {documents.map((d) => (
+        <div className="list-item" key={d.id}>
+          <a href={d.url} target="_blank" rel="noreferrer" style={{ flex: 1 }}>{d.name}</a>
+          <span className="muted" style={{ fontSize: 11 }}>{fmtDate(d.addedAt.slice(0, 10))}</span>
+          <button className="btn sm ghost" onClick={() => removeDocument(d.id)}><span className="msi">delete</span></button>
+        </div>
+      ))}
     </div>
   );
 }

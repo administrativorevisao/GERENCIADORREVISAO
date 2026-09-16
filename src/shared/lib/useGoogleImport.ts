@@ -31,6 +31,15 @@ export function useGoogleImport() {
     return openDrivePicker(apiKey, token, "documents");
   }
 
+  // Seletor sem restrição de tipo — pra anexar qualquer arquivo do Drive
+  // (PDF, planilha, doc, imagem...) como documento de um projeto, guardando
+  // só o link, sem extrair conteúdo.
+  async function pickAnyFile(): Promise<{ id: string; name: string; url: string } | null> {
+    requireCreds();
+    const token = await getGoogleAccessToken(clientId);
+    return openDrivePicker(apiKey, token, "files");
+  }
+
   async function sheetRowsFromId(fileId: string): Promise<SheetRow[]> {
     if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de importar.");
     return fetchGoogleSheetRows(clientId, fileId, "A1:Z2000");
@@ -45,6 +54,7 @@ export function useGoogleImport() {
     ready: Boolean(clientId && apiKey),
     pickSpreadsheet,
     pickDocument,
+    pickAnyFile,
     sheetRowsFromId,
     docTextFromId,
     extractFileId: extractDriveFileId,
