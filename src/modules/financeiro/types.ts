@@ -26,6 +26,17 @@ export const FIN_TXN_STATUS: Record<FinTxnStatus, string> = {
   cancelado: "Cancelado",
 };
 
+// Autorização do CEO (ou outro admin) antes de uma despesa poder ser paga —
+// só se aplica a contas a pagar criadas manualmente; lançamentos vindos da
+// sincronização do razão bancário (já executados, histórico) entram
+// aprovados direto, pois não há o que autorizar num gasto que já aconteceu.
+export type ApprovalStatus = "pendente" | "aprovado" | "rejeitado";
+export const APPROVAL_STATUS_LABEL: Record<ApprovalStatus, string> = {
+  pendente: "Aguardando aprovação",
+  aprovado: "Aprovado",
+  rejeitado: "Rejeitado",
+};
+
 export interface FinanceTxn {
   id: string;
   type: "receita" | "despesa";
@@ -42,6 +53,10 @@ export interface FinanceTxn {
   counterparty: string;
   description: string;
   projectId: string | null;
+  isFixed: boolean;
+  approvalStatus: ApprovalStatus;
+  approvedBy: string | null;
+  approvedAt: string | null;
   sourceType: "manual" | "invoice" | "payroll" | "contractorInvoice";
   sourceId: string | null;
   sourceSheetLinkId?: string | null;
