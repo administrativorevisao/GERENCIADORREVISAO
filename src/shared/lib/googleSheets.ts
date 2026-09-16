@@ -154,9 +154,12 @@ export async function getGoogleAccessToken(clientId: string): Promise<string> {
   });
 }
 
+// Planilhas reais às vezes têm espaços a mais no título da coluna (ex:
+// " Valor " em vez de "Valor") — sem isso, toda leitura por r["Valor"]
+// falha silenciosamente e a linha inteira é ignorada na importação.
 function rowsFromValues(values: unknown[][]): SheetRow[] {
   if (!values.length) return [];
-  const headers = values[0] as string[];
+  const headers = (values[0] as string[]).map((h) => String(h ?? "").trim());
   return values.slice(1).map((row) => {
     const obj: SheetRow = {};
     headers.forEach((h, i) => { obj[h] = row[i] != null ? String(row[i]) : ""; });
@@ -194,7 +197,7 @@ export async function fetchGoogleSheetRowsMulti(clientId: string, sheetId: strin
   (data.valueRanges ?? []).forEach((vr: { values?: unknown[][] }, idx: number) => {
     const values = vr.values ?? [];
     if (!values.length) return;
-    const headers = values[0] as string[];
+    const headers = (values[0] as string[]).map((h) => String(h ?? "").trim());
     const tabName = tabs[idx];
     values.slice(1).forEach((row) => {
       const obj: SheetRow = { _aba: tabName };

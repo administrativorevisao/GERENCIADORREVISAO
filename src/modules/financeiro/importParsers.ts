@@ -68,5 +68,6 @@ export function dreGroupFromCentroCusto(v: unknown, isReceita: boolean): DreGrou
 }
 
 export function isLedgerFormat(row: SheetRow): boolean {
-  return row["Categoria (Centro de custo)"] != null || row["Data de Competência"] != null || row["Data de Pagamento"] != null;
+  return row["Categoria (Centro de custo)"] != null || row["Data de Competência"] != null
+    || row["Data de Competencia"] != null || row["Data de Pagamento"] != null;
 }

@@ -77,7 +77,7 @@ export async function applyFinanceRows(
         category = String(r["Categoria Revisão"] || r["Categoria (Centro de custo)"] || "").trim();
         detail = String(r["Detalhamento"] || "").trim();
         description = String(r["Descrição"] || "");
-        const comp = parseDateCell(r["Data de Competência"]);
+        const comp = parseDateCell(r["Data de Competência"] || r["Data de Competencia"]);
         due = paidRaw || comp || todayISO();
         paidDate = paidRaw;
         competenceMonth = (comp || due).slice(0, 7);
