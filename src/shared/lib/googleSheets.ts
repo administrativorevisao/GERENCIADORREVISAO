@@ -232,3 +232,30 @@ export function extractDriveFileId(urlOrId: string): string | null {
 }
 
 export const extractSheetId = extractDriveFileId;
+
+// Extrai o gid (id da aba) de uma URL do Google Sheets, ex:
+// ".../edit?gid=417234875#gid=417234875" → "417234875". Sheets sem gid na
+// URL (ou gid=0) apontam pra primeira aba, que já é o comportamento padrão.
+export function extractGid(urlOrId: string): string | null {
+  const m = String(urlOrId || "").match(/[?&#]gid=(\d+)/);
+  return m ? m[1] : null;
+}
+
+// Resolve um gid pro nome real da aba (a API de valores do Sheets só aceita
+// nome de aba no range, não o gid) — usado quando o usuário cola um link
+// que aponta pra uma aba específica, pra sincronizar a aba certa em vez de
+// sempre cair na primeira.
+export async function fetchSheetTitleByGid(clientId: string, sheetId: string, gid: string): Promise<string | null> {
+  const token = await getGoogleAccessToken(clientId);
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Google Sheets (${res.status}): ${body.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const sheets: { properties: { sheetId: number; title: string } }[] = data.sheets ?? [];
+  const match = sheets.find((s) => String(s.properties.sheetId) === gid);
+  return match?.properties.title ?? null;
+}

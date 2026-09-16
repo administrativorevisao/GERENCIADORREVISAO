@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { extractSheetId, getGoogleAccessToken, MONTH_TABS_PT, openDrivePicker } from "../../shared/lib/googleSheets";
+import { extractGid, extractSheetId, fetchSheetTitleByGid, getGoogleAccessToken, MONTH_TABS_PT, openDrivePicker } from "../../shared/lib/googleSheets";
 import { useAppSettings } from "../../core/companies/appSettings";
 import { useSaveSheetLink } from "./sheetLinks";
 import type { SheetLink } from "./sheetLinks";
@@ -43,15 +43,36 @@ export function SheetLinkModal({ view, link, onClose }: { view: FinViewId; link:
   }
 
   async function handleSave() {
-    const sheetId = extractSheetId(url.trim());
+    setError(null);
+    const trimmedUrl = url.trim();
+    const sheetId = extractSheetId(trimmedUrl);
     if (!sheetId) {
       setError("Não consegui reconhecer o ID da planilha nessa URL. Cole o link completo do Google Sheets.");
       return;
     }
-    const tabs = tabMode === "months" ? MONTH_TABS_PT
+    let tabs = tabMode === "months" ? MONTH_TABS_PT
       : tabMode === "custom" ? customTabs.split(",").map((s) => s.trim()).filter(Boolean)
       : null;
-    await saveSheetLink.mutateAsync({ view, sheetId, sheetUrl: url.trim(), tabs, range: "A1:Z2000", existing: link ?? undefined });
+    // Se o link colado aponta pra uma aba específica (tem "gid=" na URL) e o
+    // usuário não escolheu outro modo manualmente, sincroniza aquela aba —
+    // sem isso, o padrão "Primeira aba" ignorava o gid e lia a aba errada.
+    if (tabMode === "first") {
+      const gid = extractGid(trimmedUrl);
+      if (gid && gid !== "0") {
+        if (!settings?.googleClientId) {
+          setError("Configure o Client ID do Google em Administração antes de vincular por esse link.");
+          return;
+        }
+        try {
+          const title = await fetchSheetTitleByGid(settings.googleClientId, sheetId, gid);
+          if (title) tabs = [title];
+        } catch (e) {
+          setError((e as Error).message || "Não foi possível identificar a aba da planilha pelo link.");
+          return;
+        }
+      }
+    }
+    await saveSheetLink.mutateAsync({ view, sheetId, sheetUrl: trimmedUrl, tabs, range: "A1:Z2000", existing: link ?? undefined });
     onClose();
   }
 
