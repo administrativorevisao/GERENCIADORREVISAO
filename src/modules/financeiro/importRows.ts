@@ -70,14 +70,17 @@ export async function applyFinanceRows(
       let type: "receita" | "despesa", status: "pago" | "pendente", accName: string, category: string, detail: string,
         description: string, due: string, paidDate: string | null, competenceMonth: string, dreGroup: ReturnType<typeof dreGroupFromCentroCusto>;
       if (isLedgerFormat(r)) {
+        // Algumas planilhas (ex: VND) têm só uma coluna "Data" em vez de
+        // "Data de Pagamento" + "Data de Competência" separadas — como é um
+        // razão de transações já executadas, usa "Data" como as duas.
+        const paidRaw = parseDateCell(r["Data de Pagamento"]) || parseDateCell(r["Data"]);
         type = signed < 0 ? "despesa" : "receita";
-        const paidRaw = parseDateCell(r["Data de Pagamento"]);
         status = paidRaw ? "pago" : "pendente";
         accName = String(r["Banco"] || "").trim();
         category = String(r["Categoria Revisão"] || r["Categoria (Centro de custo)"] || "").trim();
         detail = String(r["Detalhamento"] || "").trim();
         description = String(r["Descrição"] || "");
-        const comp = parseDateCell(r["Data de Competência"] || r["Data de Competencia"]);
+        const comp = parseDateCell(r["Data de Competência"] || r["Data de Competencia"] || r["Data"]);
         due = paidRaw || comp || todayISO();
         paidDate = paidRaw;
         competenceMonth = (comp || due).slice(0, 7);
