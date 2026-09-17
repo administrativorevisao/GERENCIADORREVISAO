@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { STANDARD_DEPARTMENTS } from "../companies/companies";
+import { useEffect, useState } from "react";
+import { COMPANIES, STANDARD_DEPARTMENTS } from "../companies/companies";
+import { useSetUserCompanies, useUserCompanyIds } from "../companies/userCompanies";
 import { pickFile, resizeImageToDataURL } from "../../shared/lib/imageUpload";
 import { Avatar } from "../../shared/ui/Avatar";
 import { createOrResetLogin } from "./adminAuth";
@@ -11,6 +12,8 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
   const { data: roles } = useRoles();
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
+  const { data: existingExtraCompanies } = useUserCompanyIds(user?.id ?? null);
+  const setUserCompanies = useSetUserCompanies();
 
   const [name, setName] = useState(user?.name ?? "");
   const [shortName, setShortName] = useState(user?.shortName ?? "");
@@ -25,6 +28,11 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
   const [paymentAmount, setPaymentAmount] = useState(String(user?.paymentAmount ?? ""));
   const [paymentBankInfo, setPaymentBankInfo] = useState(user?.paymentBankInfo ?? "");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [extraCompanyIds, setExtraCompanyIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (existingExtraCompanies) setExtraCompanyIds(existingExtraCompanies);
+  }, [existingExtraCompanies]);
 
   const [password, setPassword] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
@@ -67,12 +75,20 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
       allowedViews: role ? role.allowedViews : (user?.allowedViews ?? null),
     };
     try {
-      if (user) await updateUser.mutateAsync({ ...user, ...patch });
-      else await createUser.mutateAsync(patch);
+      if (user) {
+        await updateUser.mutateAsync({ ...user, ...patch });
+        await setUserCompanies.mutateAsync({ userId: user.id, companyIds: extraCompanyIds });
+      } else {
+        await createUser.mutateAsync(patch);
+      }
       onClose();
     } catch (e) {
       alert((e as Error).message || "Não foi possível salvar.");
     }
+  }
+
+  function toggleExtraCompany(id: string) {
+    setExtraCompanyIds((cur) => (cur.includes(id) ? cur.filter((c) => c !== id) : [...cur, id]));
   }
 
   async function handleCreateLogin() {
@@ -152,6 +168,24 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
             <label htmlFor="tm-notes">Observações</label>
             <textarea id="tm-notes" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anotações internas sobre este colaborador" />
           </div>
+
+          {user && (
+            <>
+              <div className="section-title" style={{ fontSize: 13, marginTop: 14 }}>Empresas adicionais</div>
+              <p className="hint">
+                Além da empresa principal, marque outras que este colaborador também deve acessar — ele loga uma
+                vez só e troca pelo seletor de empresa, igual admin já faz.
+              </p>
+              <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
+                {COMPANIES.map((c) => (
+                  <label key={c.id} className="row" style={{ alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <input type="checkbox" checked={extraCompanyIds.includes(c.id)} onChange={() => toggleExtraCompany(c.id)} />
+                    <span>{c.name}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
 
           <div className="section-title" style={{ fontSize: 13, marginTop: 14 }}>Pagamento</div>
           <div className="row">

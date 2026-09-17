@@ -1,13 +1,15 @@
 import { NavLink } from "react-router-dom";
 import { useCompany } from "../../core/companies/CompanyContext";
+import { useAccessibleCompanies } from "../../core/companies/useAccessibleCompanies";
 import { useAuth } from "../auth/AuthContext";
 import { canView, isAdmin } from "../auth/types";
 import { BrandLogo } from "../ui/BrandLogo";
 import { NAV } from "./nav";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { company, companies, setCompanyId } = useCompany();
+  const { company, setCompanyId } = useCompany();
   const { profile } = useAuth();
+  const companies = useAccessibleCompanies();
 
   let lastGroup: string | undefined;
 

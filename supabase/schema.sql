@@ -99,13 +99,48 @@ create or replace function public.app_team_id() returns text
   language sql stable security definer set search_path=public as $$
   select data->>'teamId' from public.users where lower(data->>'email') = app_email() limit 1 $$;
 
--- Empresa do usuário logado — chave de toda a isolação multiempresa abaixo.
+-- Empresa "principal" do usuário logado (users.company_id) — continua
+-- existindo pra identidade/perfil, mas não é mais o único critério de
+-- acesso: ver app_has_company() logo abaixo.
 create or replace function public.app_company_id() returns text
   language sql stable security definer set search_path=public as $$
   select company_id from public.users where lower(data->>'email') = app_email() limit 1 $$;
 
 create or replace function public.is_admin() returns boolean
   language sql stable as $$ select public.app_role() = 'admin' $$;
+
+-- Colaborador membro de mais de uma empresa (login único, troca pelo
+-- seletor de empresa) — cada linha extra fica em public.user_companies,
+-- além da empresa "principal" em users.company_id.
+create table if not exists public.user_companies (
+  id text primary key,
+  user_id text not null,
+  company_id text not null,
+  created_at timestamptz default now(),
+  unique (user_id, company_id)
+);
+alter table public.user_companies enable row level security;
+
+-- Verdadeiro se o usuário logado pode acessar a empresa "target" — admin
+-- acessa qualquer uma; os demais, a própria empresa principal ou qualquer
+-- uma cadastrada em user_companies. É esta função (não mais a igualdade
+-- direta com app_company_id()) que toda política de RLS abaixo usa.
+create or replace function public.app_has_company(target text) returns boolean
+  language sql stable security definer set search_path=public as $$
+  select public.is_admin()
+    or target = public.app_company_id()
+    or exists (
+      select 1 from public.user_companies uc
+      where uc.user_id = public.app_user_id() and uc.company_id = target
+    )
+$$;
+
+drop policy if exists user_companies_self_read on public.user_companies;
+create policy user_companies_self_read on public.user_companies for select to authenticated
+  using ( user_id = public.app_user_id() or public.is_admin() );
+drop policy if exists user_companies_admin_write on public.user_companies;
+create policy user_companies_admin_write on public.user_companies for all to authenticated
+  using ( public.is_admin() ) with check ( public.is_admin() );
 
 -- Financeiro é um módulo sigiloso: leitura E escrita exigem autorização
 -- explícita (data->>'financeAccess' = true no cadastro do colaborador),
@@ -144,7 +179,7 @@ begin
   foreach t in array array['departments','teams','users','programs','task_templates','recurring_activities','weekly_objectives','link_templates','editais','calendars','calendar_events','company_settings','roles','procedures']
   loop
     execute format('drop policy if exists %I_read on public.%I;', t, t);
-    execute format('create policy %I_read on public.%I for select to authenticated using (company_id = public.app_company_id() or public.is_admin());', t, t);
+    execute format('create policy %I_read on public.%I for select to authenticated using (public.app_has_company(company_id));', t, t);
     execute format('drop policy if exists %I_admin on public.%I;', t, t);
     execute format('create policy %I_admin on public.%I for all to authenticated using (public.is_admin()) with check (public.is_admin());', t, t);
   end loop;
@@ -156,19 +191,19 @@ end $$;
 -- quais campos cada perfil deve mexer é responsabilidade do cliente.
 drop policy if exists users_self_update on public.users;
 create policy users_self_update on public.users for update to authenticated
-  using ( company_id = public.app_company_id() and lower(data->>'email') = public.app_email() )
-  with check ( company_id = public.app_company_id() and lower(data->>'email') = public.app_email() );
+  using ( public.app_has_company(company_id) and lower(data->>'email') = public.app_email() )
+  with check ( public.app_has_company(company_id) and lower(data->>'email') = public.app_email() );
 
 -- 4a2. PROJETOS: leitura por todos autenticados da empresa; criar/excluir só
 -- admin; ATUALIZAR é aberto a todos autenticados da empresa (qualquer
 -- colaborador do setor precisa poder colar o link do próprio setor no
 -- Briefing). Proteção de QUAIS campos cada perfil pode mudar é no cliente.
 drop policy if exists projects_read on public.projects;
-create policy projects_read on public.projects for select to authenticated using ( company_id = public.app_company_id() or public.is_admin() );
+create policy projects_read on public.projects for select to authenticated using ( public.app_has_company(company_id) );
 drop policy if exists projects_insert on public.projects;
 create policy projects_insert on public.projects for insert to authenticated with check ( public.is_admin() );
 drop policy if exists projects_update on public.projects;
-create policy projects_update on public.projects for update to authenticated using ( company_id = public.app_company_id() or public.is_admin() ) with check ( company_id = public.app_company_id() or public.is_admin() );
+create policy projects_update on public.projects for update to authenticated using ( public.app_has_company(company_id) ) with check ( public.app_has_company(company_id) );
 drop policy if exists projects_delete on public.projects;
 create policy projects_delete on public.projects for delete to authenticated using ( public.is_admin() );
 
@@ -177,7 +212,7 @@ create policy projects_delete on public.projects for delete to authenticated usi
 drop policy if exists tasks_read on public.tasks;
 create policy tasks_read on public.tasks for select to authenticated
   using ( public.is_admin()
-          or (company_id = public.app_company_id()
+          or (public.app_has_company(company_id)
               and (data->>'responsibleId' = public.app_user_id()
                    or (data->>'teamId' is not null and data->>'teamId' = public.app_team_id()))) );
 
@@ -188,12 +223,12 @@ create policy tasks_read on public.tasks for select to authenticated
 -- que concluiu a etapa anterior — não só quando for um admin.
 drop policy if exists tasks_insert on public.tasks;
 create policy tasks_insert on public.tasks for insert to authenticated
-  with check ( company_id = public.app_company_id() or public.is_admin() );
+  with check ( public.app_has_company(company_id) );
 
 drop policy if exists tasks_update on public.tasks;
 create policy tasks_update on public.tasks for update to authenticated
-  using ( public.is_admin() or (company_id = public.app_company_id() and data->>'responsibleId' = public.app_user_id()) )
-  with check ( public.is_admin() or (company_id = public.app_company_id() and data->>'responsibleId' = public.app_user_id()) );
+  using ( public.is_admin() or (public.app_has_company(company_id) and data->>'responsibleId' = public.app_user_id()) )
+  with check ( public.is_admin() or (public.app_has_company(company_id) and data->>'responsibleId' = public.app_user_id()) );
 
 drop policy if exists tasks_delete on public.tasks;
 create policy tasks_delete on public.tasks for delete to authenticated
@@ -201,9 +236,9 @@ create policy tasks_delete on public.tasks for delete to authenticated
 
 -- 4b2. REUNIÕES: qualquer autenticado da empresa lê e cria; só admin edita/exclui.
 drop policy if exists meetings_read on public.meetings;
-create policy meetings_read on public.meetings for select to authenticated using ( company_id = public.app_company_id() or public.is_admin() );
+create policy meetings_read on public.meetings for select to authenticated using ( public.app_has_company(company_id) );
 drop policy if exists meetings_insert on public.meetings;
-create policy meetings_insert on public.meetings for insert to authenticated with check ( company_id = public.app_company_id() or public.is_admin() );
+create policy meetings_insert on public.meetings for insert to authenticated with check ( public.app_has_company(company_id) );
 drop policy if exists meetings_update on public.meetings;
 create policy meetings_update on public.meetings for update to authenticated
   using ( public.is_admin() ) with check ( public.is_admin() );
@@ -217,12 +252,12 @@ create policy meetings_delete on public.meetings for delete to authenticated usi
 -- procedimento (tabela "procedures") já segue a regra padrão de tabela de
 -- referência (só admin escreve), aplicada no loop da seção 4a.
 drop policy if exists procedure_runs_read on public.procedure_runs;
-create policy procedure_runs_read on public.procedure_runs for select to authenticated using ( company_id = public.app_company_id() or public.is_admin() );
+create policy procedure_runs_read on public.procedure_runs for select to authenticated using ( public.app_has_company(company_id) );
 drop policy if exists procedure_runs_insert on public.procedure_runs;
-create policy procedure_runs_insert on public.procedure_runs for insert to authenticated with check ( company_id = public.app_company_id() or public.is_admin() );
+create policy procedure_runs_insert on public.procedure_runs for insert to authenticated with check ( public.app_has_company(company_id) );
 drop policy if exists procedure_runs_update on public.procedure_runs;
 create policy procedure_runs_update on public.procedure_runs for update to authenticated
-  using ( company_id = public.app_company_id() or public.is_admin() ) with check ( company_id = public.app_company_id() or public.is_admin() );
+  using ( public.app_has_company(company_id) ) with check ( public.app_has_company(company_id) );
 drop policy if exists procedure_runs_delete on public.procedure_runs;
 create policy procedure_runs_delete on public.procedure_runs for delete to authenticated using ( public.is_admin() );
 
@@ -230,12 +265,12 @@ create policy procedure_runs_delete on public.procedure_runs for delete to authe
 -- abertas a qualquer autenticado da empresa (é um quadro colaborativo do
 -- time); excluir é só admin.
 drop policy if exists launches_read on public.launches;
-create policy launches_read on public.launches for select to authenticated using ( company_id = public.app_company_id() or public.is_admin() );
+create policy launches_read on public.launches for select to authenticated using ( public.app_has_company(company_id) );
 drop policy if exists launches_insert on public.launches;
-create policy launches_insert on public.launches for insert to authenticated with check ( company_id = public.app_company_id() or public.is_admin() );
+create policy launches_insert on public.launches for insert to authenticated with check ( public.app_has_company(company_id) );
 drop policy if exists launches_update on public.launches;
 create policy launches_update on public.launches for update to authenticated
-  using ( company_id = public.app_company_id() or public.is_admin() ) with check ( company_id = public.app_company_id() or public.is_admin() );
+  using ( public.app_has_company(company_id) ) with check ( public.app_has_company(company_id) );
 drop policy if exists launches_delete on public.launches;
 create policy launches_delete on public.launches for delete to authenticated using ( public.is_admin() );
 
@@ -249,7 +284,7 @@ begin
   foreach t in array array['finance_transactions','finance_accounts','finance_invoices','finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links']
   loop
     execute format('drop policy if exists %I_rw on public.%I;', t, t);
-    execute format('create policy %I_rw on public.%I for all to authenticated using (public.is_admin() or (company_id = public.app_company_id() and public.is_finance_authorized())) with check (public.is_admin() or (company_id = public.app_company_id() and public.is_finance_authorized()));', t, t);
+    execute format('create policy %I_rw on public.%I for all to authenticated using (public.is_admin() or (public.app_has_company(company_id) and public.is_finance_authorized())) with check (public.is_admin() or (public.app_has_company(company_id) and public.is_finance_authorized()));', t, t);
   end loop;
 end $$;
 
@@ -257,13 +292,13 @@ end $$;
 -- Qualquer autenticado da empresa insere.
 drop policy if exists notif_read on public.notifications;
 create policy notif_read on public.notifications for select to authenticated
-  using ( public.is_admin() or (company_id = public.app_company_id() and data->>'createdBy' = public.app_user_id()) );
+  using ( public.is_admin() or (public.app_has_company(company_id) and data->>'createdBy' = public.app_user_id()) );
 drop policy if exists notif_insert on public.notifications;
-create policy notif_insert on public.notifications for insert to authenticated with check ( company_id = public.app_company_id() or public.is_admin() );
+create policy notif_insert on public.notifications for insert to authenticated with check ( public.app_has_company(company_id) );
 drop policy if exists notif_update on public.notifications;
 create policy notif_update on public.notifications for update to authenticated
-  using ( public.is_admin() or (company_id = public.app_company_id() and data->>'createdBy' = public.app_user_id()) )
-  with check ( public.is_admin() or (company_id = public.app_company_id() and data->>'createdBy' = public.app_user_id()) );
+  using ( public.is_admin() or (public.app_has_company(company_id) and data->>'createdBy' = public.app_user_id()) )
+  with check ( public.is_admin() or (public.app_has_company(company_id) and data->>'createdBy' = public.app_user_id()) );
 drop policy if exists notif_delete on public.notifications;
 create policy notif_delete on public.notifications for delete to authenticated using ( public.is_admin() );
 
