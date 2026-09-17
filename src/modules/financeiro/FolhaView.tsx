@@ -6,15 +6,22 @@ import { usePayroll } from "./useFinance";
 import type { FinancePayroll } from "./types";
 import { PayrollModal } from "./PayrollModal";
 import { SheetSyncPanel } from "./SheetSyncPanel";
+import { DateFilterBar } from "./DateFilterBar";
 
 export function FolhaView() {
   const { data: payroll, isLoading } = usePayroll();
   const { data: users } = useUsers();
   const [editing, setEditing] = useState<FinancePayroll | null | "new">(null);
+  const [dayFilter, setDayFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
   if (isLoading) return <div className="empty">Carregando folha…</div>;
 
-  const list = (payroll ?? []).slice().sort((a, b) => b.competenceMonth.localeCompare(a.competenceMonth));
+  const list = (payroll ?? [])
+    .filter((p) => !dayFilter || p.dueDate === dayFilter)
+    .filter((p) => !monthFilter || p.competenceMonth === monthFilter)
+    .slice()
+    .sort((a, b) => b.competenceMonth.localeCompare(a.competenceMonth));
 
   return (
     <div>
@@ -22,6 +29,7 @@ export function FolhaView() {
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Folha de Pagamento <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />
+        <DateFilterBar day={dayFilter} month={monthFilter} onDayChange={setDayFilter} onMonthChange={setMonthFilter} dayLabel="Vencimento" monthLabel="Competência" />
         <button className="btn primary sm" onClick={() => setEditing("new")}>+ Nova folha</button>
       </div>
       {list.length === 0 && <div className="empty">Nenhum registro de folha ainda.</div>}

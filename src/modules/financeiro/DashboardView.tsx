@@ -1,17 +1,22 @@
+import { useState } from "react";
 import { cashPosition, actualFor } from "./api";
 import { useAccounts, useGoals, useTxns } from "./useFinance";
 import { fmtMoney } from "../../shared/lib/money";
 import { todayISO } from "../../shared/lib/dates";
+import { DateFilterBar } from "./DateFilterBar";
 
 export function DashboardView() {
   const { data: accounts, isLoading: la } = useAccounts();
   const { data: txns, isLoading: lt } = useTxns();
   const { data: goals, isLoading: lg } = useGoals();
+  const [dayFilter, setDayFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
   if (la || lt || lg) return <div className="empty">Carregando dashboard…</div>;
 
-  const currentMonth = todayISO().slice(0, 7);
-  const cash = cashPosition(accounts ?? [], txns ?? []);
+  const currentMonth = monthFilter || todayISO().slice(0, 7);
+  const asOfDate = dayFilter || todayISO();
+  const cash = cashPosition(accounts ?? [], txns ?? [], asOfDate);
   const receita = actualFor(txns ?? [], currentMonth, "receita");
   const despesa = actualFor(txns ?? [], currentMonth, "despesa");
   const lucro = receita - despesa;
@@ -19,7 +24,11 @@ export function DashboardView() {
 
   return (
     <div>
-      <div className="section-title" style={{ margin: "0 0 14px" }}>Dashboard Financeiro</div>
+      <div className="toolbar" style={{ marginBottom: 14 }}>
+        <div className="section-title" style={{ margin: 0 }}>Dashboard Financeiro</div>
+        <span style={{ flex: 1 }} />
+        <DateFilterBar day={dayFilter} month={monthFilter} onDayChange={setDayFilter} onMonthChange={setMonthFilter} dayLabel="Saldo até o dia" monthLabel="Mês de referência" />
+      </div>
       <div className="kpis">
         <div className="kpi accent">
           <div className="lab">Saldo em caixa</div>

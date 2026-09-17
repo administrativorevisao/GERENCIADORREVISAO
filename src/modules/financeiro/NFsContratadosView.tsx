@@ -6,15 +6,22 @@ import { useContractorInvoices } from "./useFinance";
 import type { FinanceContractorInvoice } from "./types";
 import { ContractorInvoiceModal } from "./ContractorInvoiceModal";
 import { SheetSyncPanel } from "./SheetSyncPanel";
+import { DateFilterBar } from "./DateFilterBar";
 
 export function NFsContratadosView() {
   const { data: invoices, isLoading } = useContractorInvoices();
   const { data: users } = useUsers();
   const [editing, setEditing] = useState<FinanceContractorInvoice | null | "new">(null);
+  const [dayFilter, setDayFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
   if (isLoading) return <div className="empty">Carregando NFs…</div>;
 
-  const list = (invoices ?? []).slice().sort((a, b) => b.competenceMonth.localeCompare(a.competenceMonth));
+  const list = (invoices ?? [])
+    .filter((inv) => !dayFilter || inv.dueDate === dayFilter)
+    .filter((inv) => !monthFilter || inv.competenceMonth === monthFilter)
+    .slice()
+    .sort((a, b) => b.competenceMonth.localeCompare(a.competenceMonth));
 
   return (
     <div>
@@ -22,6 +29,7 @@ export function NFsContratadosView() {
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>NFs de Contratados <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />
+        <DateFilterBar day={dayFilter} month={monthFilter} onDayChange={setDayFilter} onMonthChange={setMonthFilter} dayLabel="Vencimento" monthLabel="Competência" />
         <button className="btn primary sm" onClick={() => setEditing("new")}>+ Nova NF</button>
       </div>
       {list.length === 0 && <div className="empty">Nenhuma NF registrada ainda.</div>}

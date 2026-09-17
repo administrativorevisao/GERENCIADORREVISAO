@@ -8,6 +8,7 @@ import { useTxns, useUpdateTxn } from "./useFinance";
 import { APPROVAL_STATUS_LABEL, DRE_GROUPS, type FinanceTxn } from "./types";
 import { PayableModal } from "./PayableModal";
 import { TxnModal } from "./TxnModal";
+import { DateFilterBar } from "./DateFilterBar";
 
 function deptName(id: string | null) {
   return STANDARD_DEPARTMENTS.find((d) => d.id === id)?.name ?? "—";
@@ -29,6 +30,7 @@ export function ContasView() {
   const [editingReceivable, setEditingReceivable] = useState<FinanceTxn | null>(null);
   const [deptFilter, setDeptFilter] = useState("");
   const [dreFilter, setDreFilter] = useState("");
+  const [dayFilter, setDayFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [paidFilter, setPaidFilter] = useState<"" | "pago" | "naoPago">("");
 
@@ -43,10 +45,18 @@ export function ContasView() {
   const filtered = despesas
     .filter((t) => !deptFilter || t.departmentId === deptFilter)
     .filter((t) => !dreFilter || t.dreGroup === dreFilter)
+    .filter((t) => !dayFilter || t.dueDate === dayFilter)
     .filter((t) => !monthFilter || t.dueDate.slice(0, 7) === monthFilter)
     .filter((t) => !paidFilter || (paidFilter === "pago" ? t.status === "pago" : t.status !== "pago"))
     .slice()
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  // Quanto já foi de fato pago no mês (respeita o filtro de mês, se algum
+  // estiver ativo; senão usa o mês atual) — data do pagamento, não vencimento.
+  const spentMonth = monthFilter || todayISO().slice(0, 7);
+  const spentTotal = despesas
+    .filter((t) => t.status === "pago" && (t.paidDate ?? t.dueDate).slice(0, 7) === spentMonth)
+    .reduce((sum, t) => sum + t.amount, 0);
 
   const fixedNeedsApproval = filtered.filter((t) => t.isFixed && t.requiresApproval);
   const subscriptions = filtered.filter((t) => t.isFixed && !t.requiresApproval);
@@ -162,8 +172,12 @@ export function ContasView() {
             <span className="muted" style={{ fontSize: 11.5 }}>Gastos fixos ativos</span>
             <b style={{ fontSize: 18 }}>{fixedActive.length} · {fmtMoney(fixedTotal)}/mês</b>
           </div>
+          <div className="stack">
+            <span className="muted" style={{ fontSize: 11.5 }}>Já gasto em {monthLabel(spentMonth)}</span>
+            <b style={{ fontSize: 18 }}>{fmtMoney(spentTotal)}</b>
+          </div>
           <span style={{ flex: 1 }} />
-          <input type="month" className="input" style={{ width: "auto" }} value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} />
+          <DateFilterBar day={dayFilter} month={monthFilter} onDayChange={setDayFilter} onMonthChange={setMonthFilter} dayLabel="Vencimento" monthLabel="Mês de vencimento" />
           <select className="input" style={{ width: "auto" }} value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
             <option value="">Setor: todos</option>
             {STANDARD_DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}

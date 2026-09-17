@@ -5,12 +5,15 @@ import { useTxns } from "./useFinance";
 import { FIN_TXN_STATUS, type FinanceTxn } from "./types";
 import { TxnModal } from "./TxnModal";
 import { SheetSyncPanel } from "./SheetSyncPanel";
+import { DateFilterBar } from "./DateFilterBar";
 
 export function FluxoCaixaView() {
   const { data: txns, isLoading, error } = useTxns();
   const [editing, setEditing] = useState<FinanceTxn | null | "new">(null);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [detailFilter, setDetailFilter] = useState("");
+  const [dayFilter, setDayFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
   if (isLoading) return <div className="empty">Carregando lançamentos…</div>;
   if (error) return <div className="empty">Erro: {(error as Error).message}</div>;
@@ -22,6 +25,8 @@ export function FluxoCaixaView() {
   const list = all
     .filter((t) => !categoryFilter || t.category === categoryFilter)
     .filter((t) => !detailFilter || t.detail === detailFilter)
+    .filter((t) => !dayFilter || t.dueDate === dayFilter)
+    .filter((t) => !monthFilter || t.dueDate.slice(0, 7) === monthFilter)
     .slice()
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate));
 
@@ -31,6 +36,7 @@ export function FluxoCaixaView() {
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Fluxo de Caixa <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />
+        <DateFilterBar day={dayFilter} month={monthFilter} onDayChange={setDayFilter} onMonthChange={setMonthFilter} />
         <select className="input" style={{ width: "auto" }} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
           <option value="">Categoria Revisão: todas</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}

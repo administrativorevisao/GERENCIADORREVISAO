@@ -10,10 +10,14 @@ export function MetasView() {
   const { data: goals, isLoading } = useGoals();
   const { data: txns } = useTxns();
   const [creating, setCreating] = useState(false);
+  const [monthFilter, setMonthFilter] = useState("");
 
   if (isLoading) return <div className="empty">Carregando metas…</div>;
 
-  const list = (goals ?? []).slice().sort((a, b) => b.period.localeCompare(a.period));
+  const list = (goals ?? [])
+    .filter((g) => !monthFilter || g.period === monthFilter)
+    .slice()
+    .sort((a, b) => b.period.localeCompare(a.period));
   const allTxns = txns ?? [];
 
   return (
@@ -22,6 +26,7 @@ export function MetasView() {
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Metas Financeiras <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />
+        <input type="month" className="input" style={{ width: "auto" }} value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} title="Filtrar por mês (metas não têm data exata, só período mensal)" />
         <button className="btn primary sm" onClick={() => setCreating(true)}>+ Nova meta</button>
       </div>
       {list.length === 0 && <div className="empty">Nenhuma meta cadastrada ainda.</div>}

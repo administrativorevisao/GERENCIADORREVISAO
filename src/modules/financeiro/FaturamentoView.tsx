@@ -5,14 +5,21 @@ import { useInvoices } from "./useFinance";
 import type { FinanceInvoice } from "./types";
 import { InvoiceModal } from "./InvoiceModal";
 import { SheetSyncPanel } from "./SheetSyncPanel";
+import { DateFilterBar } from "./DateFilterBar";
 
 export function FaturamentoView() {
   const { data: invoices, isLoading } = useInvoices();
   const [editing, setEditing] = useState<FinanceInvoice | null | "new">(null);
+  const [dayFilter, setDayFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
   if (isLoading) return <div className="empty">Carregando faturas…</div>;
 
-  const list = (invoices ?? []).slice().sort((a, b) => b.dueDate.localeCompare(a.dueDate));
+  const list = (invoices ?? [])
+    .filter((inv) => !dayFilter || inv.dueDate === dayFilter)
+    .filter((inv) => !monthFilter || inv.dueDate.slice(0, 7) === monthFilter)
+    .slice()
+    .sort((a, b) => b.dueDate.localeCompare(a.dueDate));
 
   return (
     <div>
@@ -20,6 +27,7 @@ export function FaturamentoView() {
       <div className="toolbar">
         <div className="section-title" style={{ margin: 0 }}>Faturamento <span className="count">{list.length}</span></div>
         <span style={{ flex: 1 }} />
+        <DateFilterBar day={dayFilter} month={monthFilter} onDayChange={setDayFilter} onMonthChange={setMonthFilter} dayLabel="Vencimento" monthLabel="Mês de vencimento" />
         <button className="btn primary sm" onClick={() => setEditing("new")}>+ Nova fatura</button>
       </div>
       {list.length === 0 && <div className="empty">Nenhuma fatura ainda.</div>}
