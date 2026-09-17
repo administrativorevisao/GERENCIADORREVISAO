@@ -1,12 +1,13 @@
 import { createRow, listRows, newId, updateRow } from "../../shared/lib/jsonStore";
 import { todayISO } from "../../shared/lib/dates";
 import type {
-  FinanceAccount, FinanceContractorInvoice, FinanceGoal, FinanceInvoice, FinancePayroll, FinanceTxn,
+  FinanceAccount, FinanceAccountBalance, FinanceContractorInvoice, FinanceGoal, FinanceInvoice, FinancePayroll, FinanceTxn,
 } from "./types";
 
 const T = {
   txns: "finance_transactions",
   accounts: "finance_accounts",
+  accountBalances: "finance_account_balances",
   invoices: "finance_invoices",
   payroll: "finance_payroll",
   contractorInvoices: "finance_contractor_invoices",
@@ -71,14 +72,32 @@ export function updateAccount(account: FinanceAccount) {
   return updateRow(T.accounts, { ...account, updatedAt: new Date().toISOString() });
 }
 
-export function accountBalance(account: FinanceAccount, txns: FinanceTxn[], asOfDate = todayISO()): number {
-  const paid = txns.filter((t) => t.accountId === account.id && t.status === "pago" && (t.paidDate ?? "") <= asOfDate);
-  const delta = paid.reduce((sum, t) => sum + (t.type === "receita" ? t.amount : -t.amount), 0);
-  return account.openingBalance + delta;
+// ---- Saldos diários observados (contas bancárias sem saldo inicial confiável) ----
+export const listAccountBalances = (companyId: string) => listRows<FinanceAccountBalance>(T.accountBalances, companyId);
+
+export function createAccountBalance(companyId: string, input: Partial<FinanceAccountBalance>) {
+  const now = new Date().toISOString();
+  const balance: FinanceAccountBalance = {
+    id: newId("fbal"), accountId: "", date: todayISO(), balance: 0, createdAt: now, updatedAt: now, ...input,
+  };
+  return createRow(T.accountBalances, companyId, balance);
 }
 
-export function cashPosition(accounts: FinanceAccount[], txns: FinanceTxn[], asOfDate = todayISO()): number {
-  return accounts.filter((a) => a.active).reduce((sum, a) => sum + accountBalance(a, txns, asOfDate), 0);
+// Usa o saldo observado mais recente até asOfDate como base (dado real de
+// planilhas com histórico diário de saldo, ex: VND) e soma só os lançamentos
+// pagos depois dessa data — sem snapshot, cai no cálculo antigo a partir do
+// saldo inicial da conta.
+export function accountBalance(account: FinanceAccount, txns: FinanceTxn[], asOfDate = todayISO(), balances: FinanceAccountBalance[] = []): number {
+  const snapshots = balances.filter((b) => b.accountId === account.id && b.date <= asOfDate).sort((a, b) => a.date.localeCompare(b.date));
+  const latest = snapshots[snapshots.length - 1];
+  const base = latest ? latest.balance : account.openingBalance;
+  const paid = txns.filter((t) => t.accountId === account.id && t.status === "pago" && (t.paidDate ?? "") <= asOfDate && (!latest || (t.paidDate ?? "") > latest.date));
+  const delta = paid.reduce((sum, t) => sum + (t.type === "receita" ? t.amount : -t.amount), 0);
+  return base + delta;
+}
+
+export function cashPosition(accounts: FinanceAccount[], txns: FinanceTxn[], asOfDate = todayISO(), balances: FinanceAccountBalance[] = []): number {
+  return accounts.filter((a) => a.active).reduce((sum, a) => sum + accountBalance(a, txns, asOfDate, balances), 0);
 }
 
 // ---- Faturamento ----

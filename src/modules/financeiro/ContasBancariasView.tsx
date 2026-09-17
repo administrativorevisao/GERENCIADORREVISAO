@@ -2,7 +2,7 @@ import { useState } from "react";
 import { fmtMoney } from "../../shared/lib/money";
 import { todayISO } from "../../shared/lib/dates";
 import { accountBalance } from "./api";
-import { useAccounts, useTxns } from "./useFinance";
+import { useAccountBalances, useAccounts, useTxns } from "./useFinance";
 import type { FinanceAccount } from "./types";
 import { AccountModal } from "./AccountModal";
 import { SheetSyncPanel } from "./SheetSyncPanel";
@@ -18,6 +18,7 @@ function lastDayOfMonth(ym: string): string {
 export function ContasBancariasView() {
   const { data: accounts, isLoading } = useAccounts();
   const { data: txns } = useTxns();
+  const { data: balances } = useAccountBalances();
   const [editing, setEditing] = useState<FinanceAccount | null | "new">(null);
   const [dayFilter, setDayFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
@@ -45,7 +46,7 @@ export function ContasBancariasView() {
           <div className="card card-pad" key={a.id} style={{ cursor: "pointer" }} onClick={() => setEditing(a)}>
             <b>{a.name}</b>
             <div className="muted" style={{ fontSize: 12 }}>{a.bank} · {a.type}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{fmtMoney(accountBalance(a, allTxns, asOfDate))}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{fmtMoney(accountBalance(a, allTxns, asOfDate, balances ?? []))}</div>
             {!a.active && <span className="badge b-soft" style={{ marginTop: 6 }}>Inativa</span>}
           </div>
         ))}

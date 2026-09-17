@@ -166,12 +166,34 @@ export async function getGoogleAccessToken(clientId: string): Promise<string> {
 // falha silenciosamente e a linha inteira é ignorada na importação.
 function rowsFromValues(values: unknown[][]): SheetRow[] {
   if (!values.length) return [];
-  const headers = (values[0] as string[]).map((h) => String(h ?? "").trim());
-  return values.slice(1).map((row) => {
+  const headerIdx = findHeaderRowIndex(values);
+  const headers = (values[headerIdx] as string[]).map((h) => String(h ?? "").trim());
+  return values.slice(headerIdx + 1).map((row) => {
     const obj: SheetRow = {};
     headers.forEach((h, i) => { obj[h] = row[i] != null ? String(row[i]) : ""; });
     return obj;
   });
+}
+
+// Algumas planilhas reais têm título, data de atualização e legenda antes da
+// linha de cabeçalho de verdade (ex: relatório de contas bancárias com
+// "Relatório Financeiro - VND" na linha 1 e os títulos das colunas só na
+// linha 5) — sem isso, essas linhas de enfeite eram lidas como se fossem o
+// cabeçalho e a planilha inteira vinha vazia. Cabeçalho de verdade: pelo
+// menos 2 células não-vazias, todas texto (não número), com a linha seguinte
+// tendo pelo menos 1 célula preenchida (dado real embaixo).
+function looksLikeHeaderRow(row: unknown[], next: unknown[]): boolean {
+  const nonEmpty = row.filter((c) => c != null && String(c).trim() !== "");
+  if (nonEmpty.length < 2) return false;
+  const allText = nonEmpty.every((c) => typeof c !== "number" && !/^-?\d+([.,]\d+)?$/.test(String(c).trim()));
+  if (!allText) return false;
+  return next.some((c) => c != null && String(c).trim() !== "");
+}
+function findHeaderRowIndex(values: unknown[][]): number {
+  for (let i = 0; i < Math.min(values.length - 1, 25); i++) {
+    if (looksLikeHeaderRow(values[i] ?? [], values[i + 1] ?? [])) return i;
+  }
+  return 0;
 }
 
 export async function fetchGoogleSheetRows(clientId: string, sheetId: string, range: string): Promise<SheetRow[]> {
@@ -204,9 +226,10 @@ export async function fetchGoogleSheetRowsMulti(clientId: string, sheetId: strin
   (data.valueRanges ?? []).forEach((vr: { values?: unknown[][] }, idx: number) => {
     const values = vr.values ?? [];
     if (!values.length) return;
-    const headers = (values[0] as string[]).map((h) => String(h ?? "").trim());
+    const headerIdx = findHeaderRowIndex(values);
+    const headers = (values[headerIdx] as string[]).map((h) => String(h ?? "").trim());
     const tabName = tabs[idx];
-    values.slice(1).forEach((row) => {
+    values.slice(headerIdx + 1).forEach((row) => {
       const obj: SheetRow = { _aba: tabName };
       headers.forEach((h, i) => { obj[h] = row[i] != null ? String(row[i]) : ""; });
       rows.push(obj);

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "../../core/companies/CompanyContext";
 import * as api from "./api";
 import type {
-  FinanceAccount, FinanceContractorInvoice, FinanceGoal, FinanceInvoice, FinancePayroll, FinanceTxn,
+  FinanceAccount, FinanceAccountBalance, FinanceContractorInvoice, FinanceGoal, FinanceInvoice, FinancePayroll, FinanceTxn,
 } from "./types";
 
 function useCompanyId() {
@@ -24,6 +24,7 @@ function makeCrudHooks<T extends { id: string }>(key: string, list: (companyId: 
 
 export const { useList: useTxns, useInvalidate: useInvalidateTxns } = makeCrudHooks<FinanceTxn>("finance_transactions", api.listTxns);
 export const { useList: useAccounts, useInvalidate: useInvalidateAccounts } = makeCrudHooks<FinanceAccount>("finance_accounts", api.listAccounts);
+export const { useList: useAccountBalances, useInvalidate: useInvalidateAccountBalances } = makeCrudHooks<FinanceAccountBalance>("finance_account_balances", api.listAccountBalances);
 export const { useList: useInvoices, useInvalidate: useInvalidateInvoices } = makeCrudHooks<FinanceInvoice>("finance_invoices", api.listInvoices);
 export const { useList: usePayroll, useInvalidate: useInvalidatePayroll } = makeCrudHooks<FinancePayroll>("finance_payroll", api.listPayroll);
 export const { useList: useContractorInvoices, useInvalidate: useInvalidateContractorInvoices } = makeCrudHooks<FinanceContractorInvoice>("finance_contractor_invoices", api.listContractorInvoices);

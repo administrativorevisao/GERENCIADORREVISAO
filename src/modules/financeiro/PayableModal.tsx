@@ -4,7 +4,7 @@ import { isAdmin } from "../../shared/auth/types";
 import { STANDARD_DEPARTMENTS } from "../../core/companies/companies";
 import { userName, useUsers } from "../../core/team/useUsers";
 import { todayISO, fmtDate } from "../../shared/lib/dates";
-import { DRE_GROUPS, APPROVAL_STATUS_LABEL, type ApprovalStatus, type DreGroup, type FinanceTxn } from "./types";
+import { APPROVAL_CUTOFF_DATE, DRE_GROUPS, APPROVAL_STATUS_LABEL, type ApprovalStatus, type DreGroup, type FinanceTxn } from "./types";
 import { useAccounts, useCreateTxn, useUpdateTxn } from "./useFinance";
 
 // Modal dedicado de Contas a Pagar (diferente do TxnModal genérico usado no
@@ -42,6 +42,9 @@ export function PayableModal({ txn, onClose }: { txn: FinanceTxn | null; onClose
   // Despesa variável sempre exige aprovação — só uma despesa fixa pode virar
   // assinatura pré-aprovada (desmarcando a caixinha abaixo).
   const effectiveRequiresApproval = !isFixed || requiresApproval;
+  // Vencimento anterior ao início do fluxo de aprovação é dado histórico
+  // (já reconciliado no DRE) — não passa pelo Terminal, entra aprovada e paga.
+  const isHistorical = dueDate < APPROVAL_CUTOFF_DATE;
 
   async function handleSave() {
     if (!description.trim()) return;
@@ -55,8 +58,9 @@ export function PayableModal({ txn, onClose }: { txn: FinanceTxn | null; onClose
     else {
       await createTxn.mutateAsync({
         ...patch,
-        status: "pendente",
-        approvalStatus: effectiveRequiresApproval ? "pendente" : "aprovado",
+        status: isHistorical ? "pago" : "pendente",
+        paidDate: isHistorical ? dueDate : null,
+        approvalStatus: isHistorical ? "aprovado" : (effectiveRequiresApproval ? "pendente" : "aprovado"),
       });
     }
     onClose();
@@ -159,6 +163,11 @@ export function PayableModal({ txn, onClose }: { txn: FinanceTxn | null; onClose
                 Sempre exigir aprovação do CEO (ex: aluguel) — desmarcado = assinatura recorrente pré-aprovada (ex: SaaS)
               </span>
             </label>
+          )}
+          {!txn && isHistorical && (
+            <p className="hint" style={{ marginTop: 4 }}>
+              Vencimento anterior a {APPROVAL_CUTOFF_DATE.split("-").reverse().join("/")}: entra direto como aprovada e paga (dado histórico, sem passar pelo Terminal).
+            </p>
           )}
           <div className="field">
             <label htmlFor="pay-notes">Observações</label>

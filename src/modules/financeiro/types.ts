@@ -37,6 +37,12 @@ export const APPROVAL_STATUS_LABEL: Record<ApprovalStatus, string> = {
   rejeitado: "Rejeitado",
 };
 
+// O fluxo de aprovação do CEO só vale de verdade a partir desta data — tudo
+// com vencimento anterior é dado histórico (já reconciliado no DRE) e entra
+// (ou é corrigido, se já existia) como aprovado e pago direto, sem passar
+// pelo Terminal.
+export const APPROVAL_CUTOFF_DATE = "2026-09-17";
+
 export interface FinanceTxn {
   id: string;
   type: "receita" | "despesa";
@@ -80,6 +86,21 @@ export interface FinanceAccount {
   openingDate: string;
   notes: string;
   active: boolean;
+  sourceSheetLinkId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Saldo observado de uma conta bancária numa data específica — vem de
+// relatórios reais que trazem histórico de saldo diário (ex: VND, com
+// aba "Histórico de Saldos Diários") em vez de uma lista de contas com saldo
+// inicial. accountBalance() usa o snapshot mais recente até a data pedida
+// como base e soma só os lançamentos pagos depois dele.
+export interface FinanceAccountBalance {
+  id: string;
+  accountId: string;
+  date: string; // "YYYY-MM-DD"
+  balance: number;
   sourceSheetLinkId?: string | null;
   createdAt: string;
   updatedAt: string;

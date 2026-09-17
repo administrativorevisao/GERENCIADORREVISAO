@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { cashPosition, actualFor } from "./api";
-import { useAccounts, useGoals, useTxns } from "./useFinance";
+import { useAccountBalances, useAccounts, useGoals, useTxns } from "./useFinance";
 import { fmtMoney } from "../../shared/lib/money";
 import { todayISO } from "../../shared/lib/dates";
 import { DateFilterBar } from "./DateFilterBar";
@@ -9,6 +9,7 @@ export function DashboardView() {
   const { data: accounts, isLoading: la } = useAccounts();
   const { data: txns, isLoading: lt } = useTxns();
   const { data: goals, isLoading: lg } = useGoals();
+  const { data: balances } = useAccountBalances();
   const [dayFilter, setDayFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
 
@@ -16,7 +17,7 @@ export function DashboardView() {
 
   const currentMonth = monthFilter || todayISO().slice(0, 7);
   const asOfDate = dayFilter || todayISO();
-  const cash = cashPosition(accounts ?? [], txns ?? [], asOfDate);
+  const cash = cashPosition(accounts ?? [], txns ?? [], asOfDate, balances ?? []);
   const receita = actualFor(txns ?? [], currentMonth, "receita");
   const despesa = actualFor(txns ?? [], currentMonth, "despesa");
   const lucro = receita - despesa;

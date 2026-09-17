@@ -34,6 +34,9 @@ create table if not exists public.finance_payroll             (id text primary k
 create table if not exists public.finance_contractor_invoices (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_goals               (id text primary key, data jsonb not null, updated_at timestamptz default now());
 create table if not exists public.finance_sheet_links         (id text primary key, data jsonb not null, updated_at timestamptz default now());
+-- Saldo observado de uma conta bancária numa data (relatórios reais com
+-- histórico diário de saldo em vez de lista de contas com saldo inicial).
+create table if not exists public.finance_account_balances    (id text primary key, data jsonb not null, updated_at timestamptz default now());
 -- Perfis de acesso ("modelos de usuário") definidos livremente em
 -- Administração — cada um empacota isAdmin/financeAccess/allowedViews,
 -- aplicados ao colaborador que o tiver atribuído (users.roleId).
@@ -64,7 +67,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs','launches'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','finance_account_balances','roles','procedures','procedure_runs','launches'
   ]
   loop
     execute format('alter table public.%I add column if not exists company_id text;', t);
@@ -81,6 +84,7 @@ create index if not exists tasks_responsible_idx on public.tasks ((data->>'respo
 create index if not exists tasks_team_idx on public.tasks ((data->>'teamId'));
 create index if not exists finance_transactions_due_idx on public.finance_transactions ((data->>'dueDate'));
 create index if not exists finance_transactions_competence_idx on public.finance_transactions ((data->>'competenceMonth'));
+create index if not exists finance_account_balances_lookup_idx on public.finance_account_balances ((data->>'accountId'), (data->>'date'));
 
 -- ---------- 3. FUNÇÕES AUXILIARES (perfil do usuário logado) ----------
 -- security definer: consultam public.users ignorando o RLS (evita recursão).
@@ -160,7 +164,7 @@ begin
     'departments','teams','users','programs','projects','task_templates','tasks',
     'recurring_activities','weekly_objectives','notifications','link_templates',
     'meetings','editais','calendars','calendar_events','company_settings','finance_transactions','finance_accounts','finance_invoices',
-    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','roles','procedures','procedure_runs','launches'
+    'finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','finance_account_balances','roles','procedures','procedure_runs','launches'
   ]
   loop
     execute format('alter table public.%I enable row level security;', t);
@@ -281,7 +285,7 @@ create policy launches_delete on public.launches for delete to authenticated usi
 do $$
 declare t text;
 begin
-  foreach t in array array['finance_transactions','finance_accounts','finance_invoices','finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links']
+  foreach t in array array['finance_transactions','finance_accounts','finance_invoices','finance_payroll','finance_contractor_invoices','finance_goals','finance_sheet_links','finance_account_balances']
   loop
     execute format('drop policy if exists %I_rw on public.%I;', t, t);
     execute format('create policy %I_rw on public.%I for all to authenticated using (public.is_admin() or (public.app_has_company(company_id) and public.is_finance_authorized())) with check (public.is_admin() or (public.app_has_company(company_id) and public.is_finance_authorized()));', t, t);

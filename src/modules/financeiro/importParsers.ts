@@ -71,3 +71,15 @@ export function isLedgerFormat(row: SheetRow): boolean {
   return row["Categoria (Centro de custo)"] != null || row["Data de Competência"] != null
     || row["Data de Competencia"] != null || row["Data de Pagamento"] != null;
 }
+
+// Relatórios reais de "Contas Bancárias" de algumas empresas (ex: VND) não
+// listam as contas com Nome/Banco/Saldo inicial — em vez disso têm uma aba
+// "Histórico de Saldos Diários", uma linha por dia com uma coluna por conta
+// (ex: "Data","BTG","Pagarme","Conta Stone","Total"). Cada coluna que não é
+// Data/Dia/Total é o nome de uma conta bancária de verdade.
+export function isDailyBalanceFormat(row: SheetRow): boolean {
+  return (row["Data"] != null || row["Dia"] != null) && row["Nome"] == null && row["Banco"] == null;
+}
+export function dailyBalanceAccountColumns(row: SheetRow): string[] {
+  return Object.keys(row).filter((k) => k !== "Data" && k !== "Dia" && k !== "Total" && k !== "_aba");
+}

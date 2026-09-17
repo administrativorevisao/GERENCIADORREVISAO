@@ -6,14 +6,19 @@ import type { TeamUser } from "../../core/team/types";
 import * as api from "./api";
 import type { FinanceAccount, FinViewId } from "./types";
 import {
-  dreGroupFromCentroCusto, dreGroupFromLabel, isLedgerFormat, parseCompetenceCell, parseDateCell, parseMoneyCell,
+  dailyBalanceAccountColumns, dreGroupFromCentroCusto, dreGroupFromLabel, isDailyBalanceFormat, isLedgerFormat,
+  parseCompetenceCell, parseDateCell, parseMoneyCell,
 } from "./importParsers";
+import { APPROVAL_CUTOFF_DATE } from "./types";
 
-const VIEW_TABLE: Record<FinViewId, string | null> = {
-  dashboard: null, dre: null,
-  fluxoCaixa: "finance_transactions", contas: "finance_transactions",
-  contasBancarias: "finance_accounts", folha: "finance_payroll",
-  nfsContratados: "finance_contractor_invoices", faturamento: "finance_invoices", metas: "finance_goals",
+const VIEW_TABLES: Record<FinViewId, string[]> = {
+  dashboard: [], dre: [],
+  fluxoCaixa: ["finance_transactions"], contas: ["finance_transactions"],
+  // Contas Bancárias pode gerar tanto contas (Nome/Banco/Saldo inicial)
+  // quanto saldos diários observados (relatórios como o da VND, com uma
+  // aba "Histórico de Saldos Diários" em vez de lista de contas).
+  contasBancarias: ["finance_accounts", "finance_account_balances"], folha: ["finance_payroll"],
+  nfsContratados: ["finance_contractor_invoices"], faturamento: ["finance_invoices"], metas: ["finance_goals"],
 };
 
 // Cada sincronização SUBSTITUI os registros que vieram daquela planilha
@@ -21,11 +26,11 @@ const VIEW_TABLE: Record<FinViewId, string | null> = {
 // várias vezes. Registros cadastrados manualmente (sem esse campo) não
 // são afetados.
 export async function removeFinanceRecordsBySource(companyId: string, view: FinViewId, linkId: string): Promise<void> {
-  const table = VIEW_TABLE[view];
-  if (!table) return;
-  const rows = await listRows<{ id: string; sourceSheetLinkId?: string }>(table, companyId);
-  const toRemove = rows.filter((r) => r.sourceSheetLinkId === linkId);
-  await Promise.all(toRemove.map((r) => removeRow(table, r.id)));
+  for (const table of VIEW_TABLES[view]) {
+    const rows = await listRows<{ id: string; sourceSheetLinkId?: string }>(table, companyId);
+    const toRemove = rows.filter((r) => r.sourceSheetLinkId === linkId);
+    await Promise.all(toRemove.map((r) => removeRow(table, r.id)));
+  }
 }
 
 function findUserByNameLoose(users: TeamUser[], name: string): TeamUser | null {
@@ -85,7 +90,6 @@ export async function applyFinanceRows(
         // razão de transações já executadas, usa "Data" como as duas.
         const paidRaw = parseDateCell(r["Data de Pagamento"]) || parseDateCell(r["Data"]);
         type = signed < 0 ? "despesa" : "receita";
-        status = paidRaw ? "pago" : "pendente";
         accName = String(r["Banco"] || "").trim();
         category = String(r["Categoria Revisão"] || r["Categoria (Centro de custo)"] || "").trim();
         detail = String(r["Detalhamento"] || "").trim();
@@ -93,7 +97,13 @@ export async function applyFinanceRows(
         const comp = parseDateCell(r["Data de Competência"] || r["Data de Competencia"] || r["Data"]);
         if (!paidRaw && !comp) { skippedNoDate++; continue; }
         due = paidRaw || comp!;
-        paidDate = paidRaw;
+        // Vencimento anterior ao início do fluxo de aprovação é dado
+        // histórico (já reconciliado no DRE) — entra pago mesmo quando a
+        // planilha só tem a data de competência, sem "Data de Pagamento"
+        // separada.
+        const isHistorical = due < APPROVAL_CUTOFF_DATE;
+        status = paidRaw || isHistorical ? "pago" : "pendente";
+        paidDate = paidRaw || (isHistorical ? due : null);
         competenceMonth = (comp || due).slice(0, 7);
         dreGroup = dreGroupFromCentroCusto(r["Categoria (Centro de custo)"], type === "receita");
       } else {
@@ -120,6 +130,18 @@ export async function applyFinanceRows(
     }
   } else if (view === "contasBancarias") {
     for (const r of rows) {
+      if (isDailyBalanceFormat(r)) {
+        const date = parseDateCell(r["Data"] || r["Dia"]);
+        if (!date) continue;
+        for (const colName of dailyBalanceAccountColumns(r)) {
+          const balance = parseMoneyCell(r[colName]);
+          if (balance == null) continue;
+          const accountId = await accountIdByName(colName);
+          await api.createAccountBalance(companyId, { accountId, date, balance, ...extra });
+          n++;
+        }
+        continue;
+      }
       const name = r["Nome"];
       if (!name) continue;
       await api.createAccount(companyId, {
