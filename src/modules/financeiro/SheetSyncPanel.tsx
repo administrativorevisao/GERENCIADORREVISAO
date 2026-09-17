@@ -42,9 +42,12 @@ export function SheetSyncPanel({ view }: { view: FinViewId }) {
         ? await fetchGoogleSheetRowsMulti(clientId, link.sheetId, link.tabs)
         : await fetchGoogleSheetRows(clientId, link.sheetId, link.range || "A1:Z2000");
       await removeFinanceRecordsBySource(company.id, view, link.id);
-      const n = await applyFinanceRows(company.id, view, rows, users ?? [], accounts ?? [], { sourceSheetLinkId: link.id });
-      await markSynced.mutateAsync({ link, count: n });
-      setMessage(`${n} registro(s) sincronizado(s) da planilha.`);
+      const { created, skippedNoDate } = await applyFinanceRows(company.id, view, rows, users ?? [], accounts ?? [], { sourceSheetLinkId: link.id });
+      await markSynced.mutateAsync({ link, count: created });
+      setMessage(
+        `${created} registro(s) sincronizado(s) da planilha.`
+        + (skippedNoDate > 0 ? ` ${skippedNoDate} linha(s) ignorada(s) por não terem Data de Pagamento nem Data de Competência preenchidas.` : ""),
+      );
     } catch (e) {
       console.error(e);
       setMessage(`Falha ao sincronizar: ${(e as Error).message ?? "erro desconhecido"}`);

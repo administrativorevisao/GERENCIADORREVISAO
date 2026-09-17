@@ -42,6 +42,15 @@ function findUserByNameLoose(users: TeamUser[], name: string): TeamUser | null {
 // visão do Financeiro. `extra` é mesclado em cada registro criado — usado
 // pra marcar sourceSheetLinkId nos vindos de uma planilha vinculada, pra
 // depois poder substituir (nunca duplicar) numa próxima sincronização.
+export interface ApplyResult {
+  created: number;
+  // Linhas do razão (Fluxo de Caixa/Contas) sem "Data de Pagamento" nem
+  // "Data de Competência" preenchidas — não dá pra inventar uma data, então
+  // a linha é ignorada em vez de cair com a data de hoje (o que faria
+  // parecer que um monte de coisa vence "hoje" sem ser verdade).
+  skippedNoDate: number;
+}
+
 export async function applyFinanceRows(
   companyId: string,
   view: FinViewId,
@@ -49,8 +58,9 @@ export async function applyFinanceRows(
   users: TeamUser[],
   accounts: FinanceAccount[],
   extra: Record<string, unknown> = {},
-): Promise<number> {
+): Promise<ApplyResult> {
   let n = 0;
+  let skippedNoDate = 0;
   const accountsCache = [...accounts];
 
   async function accountIdByName(name: string): Promise<string | null> {
@@ -81,7 +91,8 @@ export async function applyFinanceRows(
         detail = String(r["Detalhamento"] || "").trim();
         description = String(r["Descrição"] || "");
         const comp = parseDateCell(r["Data de Competência"] || r["Data de Competencia"] || r["Data"]);
-        due = paidRaw || comp || todayISO();
+        if (!paidRaw && !comp) { skippedNoDate++; continue; }
+        due = paidRaw || comp!;
         paidDate = paidRaw;
         competenceMonth = (comp || due).slice(0, 7);
         dreGroup = dreGroupFromCentroCusto(r["Categoria (Centro de custo)"], type === "receita");
@@ -178,5 +189,5 @@ export async function applyFinanceRows(
       n++;
     }
   }
-  return n;
+  return { created: n, skippedNoDate };
 }
