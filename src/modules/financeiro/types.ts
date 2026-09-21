@@ -98,7 +98,7 @@ export interface FinanceAccount {
 // como base e soma só os lançamentos pagos depois dele.
 export interface FinanceAccountBalance {
   id: string;
-  accountId: string;
+  accountId: string | null;
   date: string; // "YYYY-MM-DD"
   balance: number;
   sourceSheetLinkId?: string | null;
