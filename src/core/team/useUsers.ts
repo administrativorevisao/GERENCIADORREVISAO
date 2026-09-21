@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listRows } from "../../shared/lib/jsonStore";
 import { useCompany } from "../companies/CompanyContext";
-import { createUser, updateUser } from "./api";
+import { createUser, deleteUser, updateUser } from "./api";
 import type { TeamUser } from "./types";
 
 export function useUsers() {
@@ -26,6 +26,15 @@ export function useUpdateUser() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (user: TeamUser) => updateUser(user),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users", company.id] }),
+  });
+}
+
+export function useDeleteUser() {
+  const { company } = useCompany();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteUser(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users", company.id] }),
   });
 }

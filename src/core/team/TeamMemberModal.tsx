@@ -5,13 +5,14 @@ import { pickFile, resizeImageToDataURL } from "../../shared/lib/imageUpload";
 import { Avatar } from "../../shared/ui/Avatar";
 import { createOrResetLogin } from "./adminAuth";
 import { useRoles } from "./roles";
-import { useCreateUser, useUpdateUser } from "./useUsers";
+import { useCreateUser, useDeleteUser, useUpdateUser } from "./useUsers";
 import { PAYMENT_TYPE_LABEL, type PaymentType, type TeamUser } from "./types";
 
 export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onClose: () => void }) {
   const { data: roles } = useRoles();
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
   const { data: existingExtraCompanies } = useUserCompanyIds(user?.id ?? null);
   const setUserCompanies = useSetUserCompanies();
 
@@ -39,6 +40,18 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
 
   const saving = createUser.isPending || updateUser.isPending;
+
+  async function handleDelete() {
+    if (!user) return;
+    const ok = window.confirm(`Excluir ${user.name || "este colaborador"}? Essa ação não pode ser desfeita.`);
+    if (!ok) return;
+    try {
+      await deleteUser.mutateAsync(user.id);
+      onClose();
+    } catch (e) {
+      alert((e as Error).message || "Não foi possível excluir.");
+    }
+  }
 
   async function handleAvatarUpload() {
     const file = await pickFile("image/jpeg,image/png,image/jpg");
@@ -226,6 +239,12 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
           )}
         </div>
         <div className="modal-foot">
+          {user && (
+            <button className="btn danger" onClick={handleDelete} disabled={deleteUser.isPending}>
+              {deleteUser.isPending ? "Excluindo…" : "Excluir"}
+            </button>
+          )}
+          <span style={{ flex: 1 }} />
           <button className="btn ghost" onClick={onClose}>Cancelar</button>
           <button className="btn primary" onClick={handleSave} disabled={saving || !name.trim()}>
             {saving ? "Salvando…" : "Salvar"}

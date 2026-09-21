@@ -1,4 +1,4 @@
-import { createRow, getRow, listRows, newId, updateRow } from "../../shared/lib/jsonStore";
+import { createRow, getRow, listRows, newId, removeRow, updateRow } from "../../shared/lib/jsonStore";
 import { supabase } from "../../shared/lib/supabaseClient";
 import type { TeamUser } from "./types";
 
@@ -55,4 +55,22 @@ export async function updateUser(user: TeamUser): Promise<TeamUser> {
     }
   }
   return updateRow(USERS_TABLE, user);
+}
+
+// Mesma trava de segurança do updateUser acima, mas para exclusão: apagar o
+// único Admin da empresa tem o mesmo efeito de tirar o "admin" dele (empresa
+// fica sem ninguém que consiga gerenciar Equipe), então bloqueia do mesmo jeito.
+export async function deleteUser(id: string): Promise<void> {
+  const existing = await getRow<TeamUser>(USERS_TABLE, id);
+  if (existing?.role === "admin") {
+    const companyId = await companyIdOfUser(id);
+    if (companyId) {
+      const all = await listRows<TeamUser>(USERS_TABLE, companyId);
+      const otherAdmins = all.filter((u) => u.id !== id && u.role === "admin");
+      if (otherAdmins.length === 0) {
+        throw new Error('Não é possível excluir ' + (existing.name || "este colaborador") + " — é o único administrador da empresa. Torne outra pessoa Admin antes de excluir.");
+      }
+    }
+  }
+  return removeRow(USERS_TABLE, id);
 }
