@@ -198,6 +198,41 @@ create policy users_self_update on public.users for update to authenticated
   using ( public.app_has_company(company_id) and lower(data->>'email') = public.app_email() )
   with check ( public.app_has_company(company_id) and lower(data->>'email') = public.app_email() );
 
+-- 4a1b. TRAVA CONTRA AUTOPROMOÇÃO: a policy acima permite qualquer UPDATE
+-- na própria linha (RLS é por linha, não por coluna) — sem isto, qualquer
+-- colaborador logado poderia chamar a API do Supabase direto (fora da UI,
+-- que só deixa admin editar esses campos) e setar "role":"admin" em si
+-- mesmo, virando admin de verdade (app_role()/is_admin() leem esse mesmo
+-- campo, então isso destrancaria TUDO — todas as políticas RLS e até a
+-- Edge Function admin-create-login). Trigger bloqueia qualquer mudança
+-- nos campos sensíveis quando quem está atualizando não é admin.
+create or replace function public.prevent_user_self_privilege_escalation() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then
+    return new;
+  end if;
+  if coalesce(new.data->>'role', '') is distinct from coalesce(old.data->>'role', '')
+     or coalesce(new.data->>'roleId', '') is distinct from coalesce(old.data->>'roleId', '')
+     or coalesce(new.data->'allowedViews', 'null'::jsonb) is distinct from coalesce(old.data->'allowedViews', 'null'::jsonb)
+     or coalesce((new.data->>'financeAccess')::boolean, false) is distinct from coalesce((old.data->>'financeAccess')::boolean, false)
+     or coalesce(new.data->>'departmentId', '') is distinct from coalesce(old.data->>'departmentId', '')
+     or coalesce(new.data->>'teamId', '') is distinct from coalesce(old.data->>'teamId', '')
+     or coalesce(new.data->>'paymentType', '') is distinct from coalesce(old.data->>'paymentType', '')
+     or coalesce((new.data->>'paymentAmount')::numeric, -1) is distinct from coalesce((old.data->>'paymentAmount')::numeric, -1)
+     or coalesce(new.data->>'paymentBankInfo', '') is distinct from coalesce(old.data->>'paymentBankInfo', '')
+     or coalesce((new.data->>'hasLogin')::boolean, false) is distinct from coalesce((old.data->>'hasLogin')::boolean, false)
+  then
+    raise exception 'Você não tem permissão para alterar esse campo. Peça a um administrador.';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_prevent_user_self_privilege_escalation on public.users;
+create trigger trg_prevent_user_self_privilege_escalation
+  before update on public.users
+  for each row execute function public.prevent_user_self_privilege_escalation();
+
 -- 4a2. PROJETOS: leitura por todos autenticados da empresa; criar/excluir só
 -- admin; ATUALIZAR é aberto a todos autenticados da empresa (qualquer
 -- colaborador do setor precisa poder colar o link do próprio setor no
