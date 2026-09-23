@@ -20,9 +20,6 @@ export function createUser(companyId: string, input: Partial<TeamUser>) {
     financeAccess: false,
     avatarImage: null,
     notes: "",
-    paymentType: null,
-    paymentAmount: null,
-    paymentBankInfo: "",
     hasLogin: false,
     ...input,
   };

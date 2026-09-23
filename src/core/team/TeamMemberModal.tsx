@@ -4,6 +4,7 @@ import { useSetUserCompanies, useUserCompanyIds } from "../companies/userCompani
 import { pickFile, resizeImageToDataURL } from "../../shared/lib/imageUpload";
 import { Avatar } from "../../shared/ui/Avatar";
 import { createOrResetLogin } from "./adminAuth";
+import { paymentInfoFor, useSavePaymentInfo, usePaymentInfo } from "./paymentInfo";
 import { useRoles } from "./roles";
 import { useCreateUser, useDeleteUser, useUpdateUser } from "./useUsers";
 import { PAYMENT_TYPE_LABEL, type PaymentType, type TeamUser } from "./types";
@@ -15,6 +16,9 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
   const deleteUser = useDeleteUser();
   const { data: existingExtraCompanies } = useUserCompanyIds(user?.id ?? null);
   const setUserCompanies = useSetUserCompanies();
+  const { data: paymentInfoList } = usePaymentInfo();
+  const savePaymentInfo = useSavePaymentInfo();
+  const existingPayment = paymentInfoFor(paymentInfoList, user?.id ?? "");
 
   const [name, setName] = useState(user?.name ?? "");
   const [shortName, setShortName] = useState(user?.shortName ?? "");
@@ -25,9 +29,9 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
   const [birthDate, setBirthDate] = useState(user?.birthDate ?? "");
   const [avatarImage, setAvatarImage] = useState(user?.avatarImage ?? null);
   const [notes, setNotes] = useState(user?.notes ?? "");
-  const [paymentType, setPaymentType] = useState<PaymentType | "">(user?.paymentType ?? "");
-  const [paymentAmount, setPaymentAmount] = useState(String(user?.paymentAmount ?? ""));
-  const [paymentBankInfo, setPaymentBankInfo] = useState(user?.paymentBankInfo ?? "");
+  const [paymentType, setPaymentType] = useState<PaymentType | "">("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentBankInfo, setPaymentBankInfo] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [extraCompanyIds, setExtraCompanyIds] = useState<string[]>([]);
 
@@ -35,11 +39,21 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
     if (existingExtraCompanies) setExtraCompanyIds(existingExtraCompanies);
   }, [existingExtraCompanies]);
 
+  // Chega depois do primeiro render (query separada) — preenche os campos
+  // de pagamento assim que o registro (se houver) for carregado.
+  useEffect(() => {
+    if (!user) return;
+    setPaymentType(existingPayment?.paymentType ?? "");
+    setPaymentAmount(existingPayment?.paymentAmount != null ? String(existingPayment.paymentAmount) : "");
+    setPaymentBankInfo(existingPayment?.paymentBankInfo ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingPayment?.id]);
+
   const [password, setPassword] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
 
-  const saving = createUser.isPending || updateUser.isPending;
+  const saving = createUser.isPending || updateUser.isPending || savePaymentInfo.isPending;
 
   async function handleDelete() {
     if (!user) return;
@@ -79,20 +93,27 @@ export function TeamMemberModal({ user, onClose }: { user: TeamUser | null; onCl
       birthDate: birthDate || null,
       avatarImage,
       notes,
-      paymentType: paymentType || null,
-      paymentAmount: paymentAmount.trim() ? Number(paymentAmount) : null,
-      paymentBankInfo,
       roleId: roleId || null,
       role: role ? (role.isAdmin ? "admin" : "collaborator") : (user?.role ?? "collaborator"),
       financeAccess: role ? role.financeAccess : (user?.financeAccess ?? false),
       allowedViews: role ? role.allowedViews : (user?.allowedViews ?? null),
     };
+    const paymentPatch = {
+      paymentType: paymentType || null,
+      paymentAmount: paymentAmount.trim() ? Number(paymentAmount) : null,
+      paymentBankInfo,
+    };
     try {
+      let userId = user?.id;
       if (user) {
         await updateUser.mutateAsync({ ...user, ...patch });
         await setUserCompanies.mutateAsync({ userId: user.id, companyIds: extraCompanyIds });
       } else {
-        await createUser.mutateAsync(patch);
+        const created = await createUser.mutateAsync(patch);
+        userId = created.id;
+      }
+      if (userId) {
+        await savePaymentInfo.mutateAsync({ userId, input: paymentPatch, existing: paymentInfoList ?? [] });
       }
       onClose();
     } catch (e) {

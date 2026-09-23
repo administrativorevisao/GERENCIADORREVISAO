@@ -327,6 +327,43 @@ begin
   end loop;
 end $$;
 
+-- 4b4. SALÁRIO/PIX DO COLABORADOR: mesma trava do financeiro acima — vive
+-- fora de "users" porque users_read (seção 4a) deixa QUALQUER colega
+-- autenticado da empresa ler a tabela inteira (é assim que a tela Equipe
+-- lista todo mundo); salário e dado bancário não podiam ficar expostos a
+-- todo mundo só por estarem no mesmo JSON.
+create table if not exists public.team_payment_info (id text primary key, data jsonb not null, updated_at timestamptz default now());
+alter table public.team_payment_info add column if not exists company_id text;
+update public.team_payment_info set company_id = 'revisao' where company_id is null;
+alter table public.team_payment_info alter column company_id set not null;
+alter table public.team_payment_info alter column company_id set default 'revisao';
+create index if not exists team_payment_info_company_idx on public.team_payment_info (company_id);
+create unique index if not exists team_payment_info_user_idx on public.team_payment_info ((data->>'userId'));
+
+-- Migra o que já existia direto no JSON de "users" pra esta tabela nova, e
+-- depois apaga esses 3 campos de "users" — sem isso a exposição continua.
+insert into public.team_payment_info (id, data, company_id)
+select 'tpay_' || substr(md5(u.id), 1, 8),
+       jsonb_build_object(
+         'id', 'tpay_' || substr(md5(u.id), 1, 8),
+         'userId', u.id,
+         'paymentType', u.data->>'paymentType',
+         'paymentAmount', (u.data->>'paymentAmount')::numeric,
+         'paymentBankInfo', coalesce(u.data->>'paymentBankInfo', '')
+       ),
+       u.company_id
+from public.users u
+where u.data->>'paymentType' is not null or u.data->>'paymentAmount' is not null or coalesce(u.data->>'paymentBankInfo', '') <> ''
+on conflict do nothing;
+
+update public.users set data = data - 'paymentType' - 'paymentAmount' - 'paymentBankInfo';
+
+alter table public.team_payment_info enable row level security;
+drop policy if exists team_payment_info_rw on public.team_payment_info;
+create policy team_payment_info_rw on public.team_payment_info for all to authenticated
+  using (public.is_admin() or (public.app_has_company(company_id) and public.is_finance_authorized()))
+  with check (public.is_admin() or (public.app_has_company(company_id) and public.is_finance_authorized()));
+
 -- 4c. NOTIFICAÇÕES: admin da empresa lê tudo; colaborador lê as que gerou.
 -- Qualquer autenticado da empresa insere.
 drop policy if exists notif_read on public.notifications;

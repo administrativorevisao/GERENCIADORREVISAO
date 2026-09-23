@@ -20,8 +20,18 @@ export interface TeamUser {
   financeAccess: boolean; // definido pelo Role
   avatarImage: string | null;
   notes: string;
+  hasLogin: boolean; // se já existe uma conta de acesso (Supabase Auth) criada para este e-mail
+}
+
+// Salário/PIX de cada colaborador — tabela separada (não fica dentro de
+// TeamUser) porque `users` é legível por qualquer colega autenticado da
+// mesma empresa (é assim que a tela Equipe lista todo mundo); esse dado é
+// sensível e só deve valer para quem tem acesso ao Financeiro, então mora
+// numa tabela própria com RLS gated por is_finance_authorized().
+export interface TeamPaymentInfo {
+  id: string;
+  userId: string;
   paymentType: PaymentType | null;
   paymentAmount: number | null;
   paymentBankInfo: string; // banco/agência/conta ou chave PIX, texto livre
-  hasLogin: boolean; // se já existe uma conta de acesso (Supabase Auth) criada para este e-mail
 }
