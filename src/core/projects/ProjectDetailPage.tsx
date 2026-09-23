@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { isAdmin } from "../../shared/auth/types";
+import { safeHref } from "../../shared/lib/safeUrl";
 import { useTasks } from "../tasks/useTasks";
 import { userName, useUsers } from "../team/useUsers";
 import { useProjects, useUpdateProject } from "./useProjects";
@@ -514,7 +515,7 @@ function LinksTab({ project }: { project: Project }) {
             <div className="section-title" style={{ fontSize: 13 }}>{d.icon} {d.name}</div>
             {deptLinks.map((l) => (
               <div className="list-item" key={l.id}>
-                <a href={l.url} target="_blank" rel="noreferrer" style={{ flex: 1 }}>{l.label}</a>
+                <a href={safeHref(l.url)} target="_blank" rel="noreferrer" style={{ flex: 1 }}>{l.label}</a>
                 <button className="btn sm ghost" onClick={() => removeLink(l.id)}><span className="msi">delete</span></button>
               </div>
             ))}
@@ -569,7 +570,7 @@ function DocumentsTab({ project }: { project: Project }) {
       {documents.length === 0 && <div className="hint">Nenhum documento anexado ainda.</div>}
       {documents.map((d) => (
         <div className="list-item" key={d.id}>
-          <a href={d.url} target="_blank" rel="noreferrer" style={{ flex: 1 }}>{d.name}</a>
+          <a href={safeHref(d.url)} target="_blank" rel="noreferrer" style={{ flex: 1 }}>{d.name}</a>
           <span className="muted" style={{ fontSize: 11 }}>{fmtDate(d.addedAt.slice(0, 10))}</span>
           <button className="btn sm ghost" onClick={() => removeDocument(d.id)}><span className="msi">delete</span></button>
         </div>

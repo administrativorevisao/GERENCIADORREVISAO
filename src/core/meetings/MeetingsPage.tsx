@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { fmtDate } from "../../shared/lib/dates";
+import { safeHref } from "../../shared/lib/safeUrl";
 import { MeetingModal } from "./MeetingModal";
 import { useMeetings } from "./useMeetings";
 
@@ -42,7 +43,7 @@ export function MeetingsPage() {
               <span className="muted" style={{ fontSize: 12 }}>{deptName(meeting.departmentId)} · {fmtDate(meeting.date)}</span>
             </div>
             {meeting.recordingUrl && (
-              <a href={meeting.recordingUrl} target="_blank" rel="noreferrer" className="btn sm ghost" style={{ marginLeft: "auto" }}>
+              <a href={safeHref(meeting.recordingUrl)} target="_blank" rel="noreferrer" className="btn sm ghost" style={{ marginLeft: "auto" }}>
                 <span className="msi">videocam</span> Gravação
               </a>
             )}

@@ -379,17 +379,25 @@ drop policy if exists notif_delete on public.notifications;
 create policy notif_delete on public.notifications for delete to authenticated using ( public.is_admin() );
 
 -- ---------- 5. STORAGE (anexos) ----------
-insert into storage.buckets (id, name, public) values ('attachments','attachments', true)
+-- Nenhuma tela do app usa este bucket hoje (avatar é data URL inline,
+-- documento de projeto é link do Drive) — criado achando futuro, nunca
+-- usado. Antes era público (bucket "public: true" + política de leitura
+-- sem "to authenticated"), ou seja, QUALQUER PESSOA NA INTERNET, sem login
+-- nenhum, conseguia listar/baixar qualquer arquivo aqui, e qualquer usuário
+-- autenticado (de qualquer uma das 4 empresas) podia subir arquivo aqui sem
+-- nenhum limite de tamanho/tipo. Trocado pra privado + só autenticado.
+update storage.buckets set public = false where id = 'attachments';
+insert into storage.buckets (id, name, public) values ('attachments','attachments', false)
   on conflict (id) do nothing;
 
 drop policy if exists att_read on storage.objects;
-create policy att_read on storage.objects for select using ( bucket_id = 'attachments' );
+create policy att_read on storage.objects for select to authenticated using ( bucket_id = 'attachments' );
 drop policy if exists att_upload on storage.objects;
 create policy att_upload on storage.objects for insert to authenticated with check ( bucket_id = 'attachments' );
 drop policy if exists att_delete on storage.objects;
 create policy att_delete on storage.objects for delete to authenticated using ( bucket_id = 'attachments' );
--- Bucket PÚBLICO para simplicidade (links diretos). Para restringir, torne-o
--- privado e troque getPublicUrl por createSignedUrl no cliente.
+-- Se um dia usar este bucket, troque getPublicUrl por createSignedUrl no
+-- cliente (bucket privado não serve URL pública direta).
 
 -- ---------- 6. PRIMEIRO ADMINISTRADOR (só se o projeto for novo) ----------
 -- Se você está migrando o projeto Supabase JÁ existente do RevisãoOS antigo,
