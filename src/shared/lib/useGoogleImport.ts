@@ -20,15 +20,22 @@ export function useGoogleImport() {
     if (!apiKey) throw new Error("Configure a Chave de API do Google em Administração antes de usar o seletor do Drive.");
   }
 
+  // forceReprompt: true em todo pickX — abrir o seletor do Drive é uma ação
+  // deliberada e pouco frequente, então vale sempre confirmar a conta antes
+  // de listar os arquivos, em vez de reaproveitar um token em cache que
+  // pode ter sido pego (por essa aba, minutos ou até 1h atrás) numa conta
+  // sem acesso ao arquivo — causa real de 403 "not granted read access"
+  // que sobrevivia mesmo depois de forçar "select_account", porque o
+  // cache era checado antes do prompt rodar.
   async function pickSpreadsheet(): Promise<{ id: string; name: string; url: string } | null> {
     requireCreds();
-    const token = await getGoogleAccessToken(clientId);
+    const token = await getGoogleAccessToken(clientId, true);
     return openDrivePicker(apiKey, token, "spreadsheets");
   }
 
   async function pickDocument(): Promise<{ id: string; name: string; url: string } | null> {
     requireCreds();
-    const token = await getGoogleAccessToken(clientId);
+    const token = await getGoogleAccessToken(clientId, true);
     return openDrivePicker(apiKey, token, "documents");
   }
 
@@ -37,7 +44,7 @@ export function useGoogleImport() {
   // só o link, sem extrair conteúdo.
   async function pickAnyFile(): Promise<{ id: string; name: string; url: string } | null> {
     requireCreds();
-    const token = await getGoogleAccessToken(clientId);
+    const token = await getGoogleAccessToken(clientId, true);
     return openDrivePicker(apiKey, token, "files");
   }
 

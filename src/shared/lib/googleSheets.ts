@@ -134,8 +134,15 @@ export async function openDrivePicker(
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
-export async function getGoogleAccessToken(clientId: string): Promise<string> {
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 30000) return tokenCache.token;
+// forceReprompt força a escolha de conta mesmo com um token válido em
+// cache — usado antes de abrir o seletor do Drive (pickSpreadsheet/
+// pickDocument/pickAnyFile), pra nunca reaproveitar silenciosamente um
+// token de uma conta errada pega mais cedo na mesma aba (ex: o usuário
+// escolheu a conta errada numa primeira tentativa e todo import
+// seguinte reusava esse mesmo token até expirar, ~1h, mesmo depois de
+// "select_account" — o cache era checado ANTES do prompt rodar).
+export async function getGoogleAccessToken(clientId: string, forceReprompt = false): Promise<string> {
+  if (!forceReprompt && tokenCache && tokenCache.expiresAt > Date.now() + 30000) return tokenCache.token;
   if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de vincular planilhas.");
   await ensureGoogleIdentityLib();
   return new Promise((resolve, reject) => {
@@ -257,6 +264,11 @@ export async function fetchGoogleDocText(clientId: string, fileId: string): Prom
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    if (res.status === 403) {
+      throw new Error(
+        `Google Drive (403): a conta escolhida não tem acesso a este arquivo, ou o administrador do Google Workspace da conta bloqueia apps de terceiros acessarem o Drive (Admin Console → Segurança → Controles de API). Confirme que escolheu a conta certa na tela de login e, se persistir, isso precisa ser liberado no Workspace. Detalhe: ${body.slice(0, 200)}`,
+      );
+    }
     throw new Error(`Google Drive (${res.status}): ${body.slice(0, 200)}`);
   }
   return res.text();
