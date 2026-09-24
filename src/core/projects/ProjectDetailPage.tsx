@@ -19,7 +19,7 @@ import { STATUS_LABEL } from "../tasks/types";
 import { addDaysISO, dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
 import { newId } from "../../shared/lib/jsonStore";
 import { useGoogleImport } from "../../shared/lib/useGoogleImport";
-import { pickFile, resizeImageToDataURL } from "../../shared/lib/imageUpload";
+import { driveImageUrlFromLink, pickFile, resizeImageToDataURL } from "../../shared/lib/imageUpload";
 
 type Tab = "briefing" | "edital" | "course" | "guias" | "dates" | "links" | "documents" | "tasks";
 const TABS: { id: Tab; label: string }[] = [
@@ -42,8 +42,6 @@ export function ProjectDetailPage() {
   const updateProject = useUpdateProject();
   const [tab, setTab] = useState<Tab>("briefing");
   const [copied, setCopied] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
   const admin = isAdmin(profile);
 
   async function handleShare() {
@@ -54,21 +52,6 @@ export function ProjectDetailPage() {
     } catch {
       // clipboard indisponível (ex: navegador sem permissão) — sem feedback de erro,
       // o link continua visível na barra de endereço pra copiar manualmente.
-    }
-  }
-
-  async function handlePickImage(current: Project) {
-    setImageError(null);
-    const file = await pickFile("image/jpeg,image/png,image/jpg,image/webp");
-    if (!file) return;
-    setUploadingImage(true);
-    try {
-      const dataUrl = await resizeImageToDataURL(file, 480);
-      await updateProject.mutateAsync({ ...current, iconImage: dataUrl });
-    } catch (e) {
-      setImageError((e as Error).message || "Não foi possível processar a imagem.");
-    } finally {
-      setUploadingImage(false);
     }
   }
 
@@ -91,35 +74,11 @@ export function ProjectDetailPage() {
     <div>
       <Link to="/projetos" className="muted" style={{ fontSize: 12.5 }}>← Projetos</Link>
       <div className="row" style={{ alignItems: "center", gap: 12, margin: "10px 0 18px" }}>
-        {project.iconImage ? (
-          <img
-            src={project.iconImage} alt=""
-            style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", flex: "none" }}
-          />
-        ) : admin ? (
-          <button
-            className="btn sm ghost" style={{ width: 56, height: 56, flex: "none", flexDirection: "column", gap: 2, fontSize: 10 }}
-            onClick={() => handlePickImage(project)} disabled={uploadingImage}
-          >
-            <span className="msi" style={{ fontSize: 18 }}>add_photo_alternate</span>
-            {uploadingImage ? "..." : "Imagem"}
-          </button>
-        ) : null}
+        <ProjectImageControl project={project} admin={admin} />
         <div className="stack">
           <b style={{ fontSize: 20 }}>{project.name}</b>
           <span className="muted" style={{ fontSize: 13 }}>{project.description || "Sem descrição"}</span>
-          {imageError && <span className="hint" style={{ color: "var(--danger, #d33)" }}>{imageError}</span>}
         </div>
-        {admin && project.iconImage && (
-          <div className="row" style={{ gap: 6, flex: "none" }}>
-            <button className="btn sm ghost" onClick={() => handlePickImage(project)} disabled={uploadingImage}>
-              {uploadingImage ? "Enviando…" : "Trocar imagem"}
-            </button>
-            <button className="btn sm ghost" onClick={() => updateProject.mutate({ ...project, iconImage: null })}>
-              Remover imagem
-            </button>
-          </div>
-        )}
         <button
           className="btn sm ghost"
           style={{ marginLeft: "auto" }}
@@ -164,6 +123,115 @@ export function ProjectDetailPage() {
           <div className="field"><label>Responsável</label>{userName(users, project.ownerId)}</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Imagem de capa do projeto — aceita enviar um arquivo (comprimido e
+// guardado como data URL, igual Equipe/Perfil/Administração) ou colar um
+// link de compartilhamento do Google Drive (convertido para a URL de
+// pré-visualização direta do Drive, sem precisar de login Google). O link
+// só funciona se o arquivo estiver compartilhado como "Qualquer pessoa com
+// o link" — aviso fica sempre visível na aba de link, já que uma falha aí
+// não gera erro de JS pra capturar (o Drive só mostra um ícone genérico).
+function ProjectImageControl({ project, admin }: { project: Project; admin: boolean }) {
+  const updateProject = useUpdateProject();
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"upload" | "link">("upload");
+  const [linkValue, setLinkValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleUpload() {
+    setError(null);
+    const file = await pickFile("image/jpeg,image/png,image/jpg,image/webp");
+    if (!file) return;
+    setBusy(true);
+    try {
+      const dataUrl = await resizeImageToDataURL(file, 480);
+      await updateProject.mutateAsync({ ...project, iconImage: dataUrl });
+      setOpen(false);
+    } catch (e) {
+      setError((e as Error).message || "Não foi possível processar a imagem.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUseLink() {
+    setError(null);
+    const url = driveImageUrlFromLink(linkValue);
+    if (!url) {
+      setError('Não consegui identificar o arquivo nesse link do Drive. Copie o link de compartilhamento inteiro (Compartilhar → "Copiar link").');
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateProject.mutateAsync({ ...project, iconImage: url });
+      setOpen(false);
+      setLinkValue("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleRemove() {
+    updateProject.mutate({ ...project, iconImage: null });
+    setOpen(false);
+  }
+
+  if (!admin) {
+    return project.iconImage ? (
+      <img src={project.iconImage} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", flex: "none" }} />
+    ) : null;
+  }
+
+  return (
+    <div style={{ position: "relative", flex: "none" }}>
+      {project.iconImage ? (
+        <img
+          src={project.iconImage} alt="" onClick={() => setOpen((v) => !v)}
+          style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", cursor: "pointer" }}
+        />
+      ) : (
+        <button
+          className="btn sm ghost" style={{ width: 56, height: 56, flexDirection: "column", gap: 2, fontSize: 10 }}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="msi" style={{ fontSize: 18 }}>add_photo_alternate</span> Imagem
+        </button>
+      )}
+
+      {open && (
+        <div className="card card-pad" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 300, zIndex: 10, boxShadow: "0 4px 16px rgba(0,0,0,.18)" }}>
+          <div className="seg" style={{ marginBottom: 10 }}>
+            <button className={mode === "upload" ? "on" : ""} onClick={() => setMode("upload")}>Enviar arquivo</button>
+            <button className={mode === "link" ? "on" : ""} onClick={() => setMode("link")}>Link do Drive</button>
+          </div>
+          {mode === "upload" ? (
+            <button className="btn sm primary" style={{ width: "100%" }} onClick={handleUpload} disabled={busy}>
+              {busy ? "Enviando…" : "Escolher arquivo…"}
+            </button>
+          ) : (
+            <div className="stack" style={{ gap: 6 }}>
+              <input
+                className="input" placeholder="Cole o link de compartilhamento do Drive"
+                value={linkValue} onChange={(e) => setLinkValue(e.target.value)}
+              />
+              <p className="hint" style={{ margin: 0 }}>
+                O arquivo precisa estar compartilhado no Drive como "Qualquer pessoa com o link", senão a imagem não aparece.
+              </p>
+              <button className="btn sm primary" onClick={handleUseLink} disabled={busy || !linkValue.trim()}>
+                {busy ? "Salvando…" : "Usar este link"}
+              </button>
+            </div>
+          )}
+          {error && <p className="hint" style={{ color: "var(--danger, #d33)" }}>{error}</p>}
+          {project.iconImage && (
+            <button className="btn sm ghost" style={{ width: "100%", marginTop: 8 }} onClick={handleRemove}>Remover imagem</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

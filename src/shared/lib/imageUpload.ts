@@ -1,3 +1,18 @@
+// Converte um link de compartilhamento do Google Drive (ou o ID puro do
+// arquivo) na URL de imagem direta que o próprio Drive serve como
+// pré-visualização. Não precisa de login Google nem do seletor de
+// arquivos — só funciona se o arquivo estiver compartilhado como
+// "Qualquer pessoa com o link" (senão o Drive mostra um ícone de
+// "sem pré-visualização" no lugar da imagem, sem erro de JS pra capturar
+// — por isso o aviso é mostrado sempre na UI, não só quando falha).
+export function driveImageUrlFromLink(urlOrId: string): string | null {
+  const s = String(urlOrId || "").trim();
+  if (!s) return null;
+  const m = s.match(/\/(?:file|open)(?:\/d)?\/([a-zA-Z0-9-_]+)|[?&]id=([a-zA-Z0-9-_]+)/);
+  const id = m ? (m[1] ?? m[2]) : (/^[a-zA-Z0-9-_]{20,}$/.test(s) ? s : null);
+  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : null;
+}
+
 export function pickFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
