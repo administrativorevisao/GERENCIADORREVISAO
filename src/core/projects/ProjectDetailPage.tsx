@@ -19,6 +19,7 @@ import { STATUS_LABEL } from "../tasks/types";
 import { addDaysISO, dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
 import { newId } from "../../shared/lib/jsonStore";
 import { useGoogleImport } from "../../shared/lib/useGoogleImport";
+import { pickFile, resizeImageToDataURL } from "../../shared/lib/imageUpload";
 
 type Tab = "briefing" | "edital" | "course" | "guias" | "dates" | "links" | "documents" | "tasks";
 const TABS: { id: Tab; label: string }[] = [
@@ -41,6 +42,8 @@ export function ProjectDetailPage() {
   const updateProject = useUpdateProject();
   const [tab, setTab] = useState<Tab>("briefing");
   const [copied, setCopied] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const admin = isAdmin(profile);
 
   async function handleShare() {
@@ -51,6 +54,21 @@ export function ProjectDetailPage() {
     } catch {
       // clipboard indisponível (ex: navegador sem permissão) — sem feedback de erro,
       // o link continua visível na barra de endereço pra copiar manualmente.
+    }
+  }
+
+  async function handlePickImage(current: Project) {
+    setImageError(null);
+    const file = await pickFile("image/jpeg,image/png,image/jpg,image/webp");
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const dataUrl = await resizeImageToDataURL(file, 480);
+      await updateProject.mutateAsync({ ...current, iconImage: dataUrl });
+    } catch (e) {
+      setImageError((e as Error).message || "Não foi possível processar a imagem.");
+    } finally {
+      setUploadingImage(false);
     }
   }
 
@@ -73,10 +91,35 @@ export function ProjectDetailPage() {
     <div>
       <Link to="/projetos" className="muted" style={{ fontSize: 12.5 }}>← Projetos</Link>
       <div className="row" style={{ alignItems: "center", gap: 12, margin: "10px 0 18px" }}>
+        {project.iconImage ? (
+          <img
+            src={project.iconImage} alt=""
+            style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", flex: "none" }}
+          />
+        ) : admin ? (
+          <button
+            className="btn sm ghost" style={{ width: 56, height: 56, flex: "none", flexDirection: "column", gap: 2, fontSize: 10 }}
+            onClick={() => handlePickImage(project)} disabled={uploadingImage}
+          >
+            <span className="msi" style={{ fontSize: 18 }}>add_photo_alternate</span>
+            {uploadingImage ? "..." : "Imagem"}
+          </button>
+        ) : null}
         <div className="stack">
           <b style={{ fontSize: 20 }}>{project.name}</b>
           <span className="muted" style={{ fontSize: 13 }}>{project.description || "Sem descrição"}</span>
+          {imageError && <span className="hint" style={{ color: "var(--danger, #d33)" }}>{imageError}</span>}
         </div>
+        {admin && project.iconImage && (
+          <div className="row" style={{ gap: 6, flex: "none" }}>
+            <button className="btn sm ghost" onClick={() => handlePickImage(project)} disabled={uploadingImage}>
+              {uploadingImage ? "Enviando…" : "Trocar imagem"}
+            </button>
+            <button className="btn sm ghost" onClick={() => updateProject.mutate({ ...project, iconImage: null })}>
+              Remover imagem
+            </button>
+          </div>
+        )}
         <button
           className="btn sm ghost"
           style={{ marginLeft: "auto" }}

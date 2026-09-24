@@ -29,6 +29,12 @@ function ProjectCard({ project, draggable, onDragStart, onDragEnd }: {
       onDragEnd={onDragEnd}
     >
       <div className="row" style={{ alignItems: "flex-start", gap: 8 }}>
+        {project.iconImage && (
+          <img
+            src={project.iconImage} alt=""
+            style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover", flex: "none" }}
+          />
+        )}
         <b style={{ flex: 1 }}>{project.name}</b>
         <span className={`badge ${project.status === "done" ? "b-done" : "b-soft"}`} style={{ flex: "none" }}>
           {PROJECT_STATUS_LABEL[project.status]}
