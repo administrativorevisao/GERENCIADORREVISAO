@@ -1,22 +1,53 @@
 import { createRow, listRows, newId, updateRow } from "../../shared/lib/jsonStore";
-import { emptyCourse, type Briefing, type Program, type Project } from "./types";
+import {
+  emptyCoordenacao, emptyCourse, emptyCronogramaEstrutura, emptyEstruturaCurso, emptyLegislacaoLocalEstrutura,
+  emptyMateriaisEstrutura, emptyOferta, type Briefing, type Course, type Program, type Project,
+} from "./types";
 import { todayISO } from "../../shared/lib/dates";
 
 const PROJECTS_TABLE = "projects";
 const PROGRAMS_TABLE = "programs";
 
-// Projetos criados antes dos recursos de subprogramas/documentos não têm
-// esses campos salvos — normaliza pra não quebrar quem espera o formato novo.
-// cronogramaCompleto também mudou de texto livre pra lista de datas
-// sincronizadas com a Agenda — qualquer valor antigo (string) some, já
-// que não tem como convertê-lo automaticamente em datas de verdade.
+// Projetos criados antes dos recursos de subprogramas/documentos/estrutura
+// do curso não têm esses campos salvos (ou têm no formato antigo) — normaliza
+// pra não quebrar quem espera o formato novo. cronogramaCompleto, modalidades,
+// estruturaCurso e oferta mudaram de texto livre pra estruturas — qualquer
+// valor antigo em formato errado é descartado, já que não tem como
+// converter automaticamente texto solto nesses campos novos.
+function normalizeCourse(course: Course | undefined): Course {
+  if (!course) return { ...emptyCourse };
+  const modalidades = typeof course.modalidades === "string" && course.modalidades in MODALIDADE_KEYS ? course.modalidades : "";
+  const estruturaRaw = course.estruturaCurso as unknown;
+  const estruturaCurso = estruturaRaw && typeof estruturaRaw === "object" ? {
+    coordenacao: { ...emptyCoordenacao, ...(estruturaRaw as { coordenacao?: object }).coordenacao },
+    cronograma: { ...emptyCronogramaEstrutura, ...(estruturaRaw as { cronograma?: object }).cronograma },
+    materiais: { ...emptyMateriaisEstrutura, ...(estruturaRaw as { materiais?: object }).materiais },
+    legislacaoLocal: { ...emptyLegislacaoLocalEstrutura, ...(estruturaRaw as { legislacaoLocal?: object }).legislacaoLocal },
+  } : { ...emptyEstruturaCurso };
+  const ofertaRaw = course.oferta as unknown;
+  const oferta = ofertaRaw && typeof ofertaRaw === "object" ? { ...emptyOferta, ...ofertaRaw } : { ...emptyOferta };
+  return {
+    ...emptyCourse,
+    ...course,
+    cronogramaCompleto: Array.isArray(course.cronogramaCompleto) ? course.cronogramaCompleto : [],
+    modalidades,
+    estruturaCurso,
+    oferta,
+  };
+}
+const MODALIDADE_KEYS: Record<string, true> = {
+  objetiva: true, discursiva_com_sem_correcao: true, objetiva_discursiva_com_sem_correcao: true,
+  objetiva_discursiva_sem_correcao: true, pacote_especial: true, prova_oral_online: true,
+  prova_oral_online_presencial: true, semana_vespera: true,
+};
+
 export async function listProjects(companyId: string): Promise<Project[]> {
   const rows = await listRows<Project>(PROJECTS_TABLE, companyId);
   return rows.map((p) => ({
     ...p,
     subProgramId: p.subProgramId ?? null,
     documents: p.documents ?? [],
-    course: p.course ? { ...p.course, cronogramaCompleto: Array.isArray(p.course.cronogramaCompleto) ? p.course.cronogramaCompleto : [] } : p.course,
+    course: normalizeCourse(p.course),
   }));
 }
 

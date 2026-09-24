@@ -3,14 +3,20 @@ import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { isAdmin } from "../../shared/auth/types";
 import { safeHref } from "../../shared/lib/safeUrl";
-import { useTasks } from "../tasks/useTasks";
+import { useCreateTask, useTasks, useUpdateTask } from "../tasks/useTasks";
 import { userName, useUsers } from "../team/useUsers";
 import { useProjects, useUpdateProject } from "./useProjects";
-import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type CronogramaItem, type KeyDate, type Project, type ProjectDocument, type ProjectStatus } from "./types";
+import {
+  emptyCourse, MODALIDADE_LABEL, MODALIDADES_COM_ESTRUTURA, MODALIDADES_PRECO_DUPLO, PDF_OPCAO_LABEL,
+  PROJECT_STATUS_LABEL, TIPO_CRONOGRAMA_LABEL,
+  type Coordenacao, type Course, type CronogramaEstrutura, type CronogramaItem, type EstruturaCurso,
+  type KeyDate, type LegislacaoLocalEstrutura, type MateriaisEstrutura, type Modalidade, type Oferta,
+  type PdfOpcao, type PrecoSet, type Project, type ProjectDocument, type ProjectStatus, type SimNaoLista, type TipoCronograma,
+} from "./types";
 import { COURSE_TYPE_LABEL, GUIA_TEMPLATES, type CourseType, type GuiaContent, type ScheduledMessage, type SectorLink } from "./guiaTemplates";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { STATUS_LABEL } from "../tasks/types";
-import { dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
+import { addDaysISO, dueStatus, fmtDate, todayISO } from "../../shared/lib/dates";
 import { newId } from "../../shared/lib/jsonStore";
 import { useGoogleImport } from "../../shared/lib/useGoogleImport";
 
@@ -197,37 +203,35 @@ const COURSE_FIELD_GROUPS: Record<"edital" | "course", { title: string; intro: s
       { key: "linkConcurso", label: "Link do concurso" },
       { key: "disciplinas", label: "Disciplinas" },
       { key: "analiseEdital", label: "Análise do edital" },
+      { key: "dataProvaChave", label: "Data da prova chave" },
       { key: "cronogramaCompleto", label: "Cronograma completo do curso" },
     ],
   },
   course: {
     title: "Curso",
-    intro: "Dados comerciais/operacionais do curso — coordenação, cronograma, preço, condições.",
+    intro: "Dados comerciais/operacionais do curso — modalidade, vendas, estrutura e oferta.",
     fields: [
-      { key: "coordenador", label: "Coordenador(a)" },
       { key: "modalidades", label: "Modalidades" },
       { key: "inicioVendas", label: "Início das vendas" },
-      { key: "tempoAcesso", label: "Tempo de acesso" },
-      { key: "tipoCronograma", label: "Tipo de cronograma" },
-      { key: "estruturaCurso", label: "Estrutura do curso (Legproc, videoaulas — conforme modelo já enviado)" },
-      { key: "duracaoSemanas", label: "Duração" },
-      { key: "preco", label: "Preço" },
-      { key: "parcelamento", label: "Parcelamento" },
+      { key: "tempoAcesso", label: "Tempo de acesso (sempre 15 dias após a data da prova)" },
       { key: "condicoesComercialCs", label: "Condições comercial/CS" },
     ],
   },
 };
-const LONG_FIELDS = new Set<keyof Course>(["estruturaCurso", "observacoes", "disciplinas"]);
+const LONG_FIELDS = new Set<keyof Course>(["observacoes", "disciplinas"]);
 // Campos que guardam um link (não texto) — renderizados com um "Abrir ↗"
 // clicável ao lado do rótulo, em vez de exigir copiar/colar o valor pra
 // abrir no navegador.
 const URL_FIELDS = new Set<keyof Course>(["linkConcurso", "analiseEdital"]);
-// cronogramaCompleto não é mais um campo de texto — é a lista de datas
-// sincronizada com a Agenda Google, renderizada à parte (ver CronogramaField).
-const FIELDS_WITH_CUSTOM_UI = new Set<keyof Course>(["cronogramaCompleto"]);
+const DATE_FIELDS = new Set<keyof Course>(["dataProvaChave", "inicioVendas"]);
+// Não são mais campos de texto — renderizados à parte (custom UI).
+const FIELDS_WITH_CUSTOM_UI = new Set<keyof Course>(["cronogramaCompleto", "modalidades", "tempoAcesso"]);
 
 function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital" | "course" }) {
   const updateProject = useUpdateProject();
+  const { data: tasks } = useTasks();
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
   const { pickDocument, docTextFromId, extractFileId } = useGoogleImport();
   const [draft, setDraft] = useState<Course | null>(null);
   const [importing, setImporting] = useState(false);
@@ -242,8 +246,31 @@ function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital"
     setDraft({ ...course, [key]: value });
   }
 
+  // Data da prova chave gera (ou atualiza) sozinha uma tarefa pro Financeiro
+  // fechar este projeto — sem precisar ninguém lembrar de criar na mão.
+  async function syncProvaChaveTask(next: Course): Promise<Course> {
+    if (!next.dataProvaChave) return next;
+    const existing = next.provaChaveTaskId ? (tasks ?? []).find((t) => t.id === next.provaChaveTaskId) : null;
+    const title = `Fechar curso — ${project.name}`;
+    if (existing) {
+      await updateTask.mutateAsync({ ...existing, title, dueDate: next.dataProvaChave, projectId: project.id });
+      return next;
+    }
+    const created = await createTask.mutateAsync({
+      title, description: `Fechamento financeiro do projeto "${project.name}" — gerada automaticamente pela Data da prova chave.`,
+      type: "project", departmentId: "dep_fin", responsibleId: null, projectId: project.id,
+      scheduledDate: next.dataProvaChave, dueDate: next.dataProvaChave,
+    });
+    return { ...next, provaChaveTaskId: created.id };
+  }
+
   async function save() {
-    await updateProject.mutateAsync({ ...project, course });
+    const prevProvaChave = project.course?.dataProvaChave ?? null;
+    let next = course;
+    if (groupKey === "edital" && next.dataProvaChave !== prevProvaChave) {
+      next = await syncProvaChaveTask(next);
+    }
+    await updateProject.mutateAsync({ ...project, course: next });
     setDraft(null);
   }
 
@@ -262,6 +289,8 @@ function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital"
       setImporting(false);
     }
   }
+
+  const tempoAcessoComputed = course.dataProvaChave ? addDaysISO(course.dataProvaChave, 15) : null;
 
   return (
     <div>
@@ -286,6 +315,7 @@ function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital"
         {group.fields.filter((f) => !FIELDS_WITH_CUSTOM_UI.has(f.key)).map((f) => {
           const value = course[f.key] as string;
           const isUrl = URL_FIELDS.has(f.key);
+          const isDate = DATE_FIELDS.has(f.key);
           return (
             <div className="field" key={f.key} style={{ margin: 0 }}>
               <label htmlFor={`course-${f.key}`}>
@@ -300,21 +330,47 @@ function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital"
                 <textarea id={`course-${f.key}`} className="input" value={value} onChange={(e) => setField(f.key, e.target.value)} />
               ) : (
                 <input
-                  id={`course-${f.key}`} className="input" type={isUrl ? "url" : "text"}
+                  id={`course-${f.key}`} className="input" type={isDate ? "date" : isUrl ? "url" : "text"}
                   placeholder={isUrl ? "https://..." : undefined}
-                  value={value} onChange={(e) => setField(f.key, e.target.value)}
+                  value={value ?? ""} onChange={(e) => setField(f.key, e.target.value)}
                 />
               )}
             </div>
           );
         })}
+        {group.fields.some((f) => f.key === "modalidades") && (
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="course-modalidades">Modalidades</label>
+            <select
+              id="course-modalidades" className="input" value={course.modalidades}
+              onChange={(e) => setField("modalidades", e.target.value)}
+            >
+              <option value="">— Escolha —</option>
+              {(Object.entries(MODALIDADE_LABEL) as [Modalidade, string][]).map(([v, label]) => (
+                <option key={v} value={v}>{label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {group.fields.some((f) => f.key === "tempoAcesso") && (
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="course-tempoacesso">Tempo de acesso (sempre 15 dias após a data da prova)</label>
+            <input id="course-tempoacesso" className="input" disabled value={tempoAcessoComputed ? fmtDate(tempoAcessoComputed) : "Preencha a Data da prova chave no Concurso"} />
+          </div>
+        )}
       </div>
       {changed && (
-        <button className="btn primary sm" style={{ marginTop: 14 }} onClick={save} disabled={updateProject.isPending}>
-          {updateProject.isPending ? "Salvando…" : "Salvar dados do curso"}
+        <button className="btn primary sm" style={{ marginTop: 14 }} onClick={save} disabled={updateProject.isPending || createTask.isPending || updateTask.isPending}>
+          {updateProject.isPending || createTask.isPending || updateTask.isPending ? "Salvando…" : "Salvar dados do curso"}
         </button>
       )}
       {group.fields.some((f) => f.key === "cronogramaCompleto") && <CronogramaField project={project} course={course} />}
+      {groupKey === "course" && (
+        <>
+          <EstruturaCursoField project={project} course={course} />
+          <OfertaField project={project} course={course} />
+        </>
+      )}
     </div>
   );
 }
@@ -401,6 +457,320 @@ function CronogramaField({ project, course }: { project: Project; course: Course
             <button className="btn sm ghost" onClick={() => removeItem(item)} disabled={busy}>Remover</button>
           </div>
         ))
+      )}
+    </div>
+  );
+}
+
+const ESTRUTURA_SUBTABS = ["coordenacao", "cronograma", "materiais", "legislacaoLocal"] as const;
+type EstruturaSubTab = (typeof ESTRUTURA_SUBTABS)[number];
+const ESTRUTURA_SUBTAB_LABEL: Record<EstruturaSubTab, string> = {
+  coordenacao: "Coordenação", cronograma: "Cronograma", materiais: "Materiais", legislacaoLocal: "Legislação Local",
+};
+
+// Diferença em semanas cheias entre duas datas ISO ("YYYY-MM-DD") — usada
+// pra "Duração do cronograma em semanas", sempre calculada a partir da
+// Data de início do cronograma e da Data da prova chave (aba Concurso),
+// nunca guardada separadamente.
+function diffWeeks(startISO: string | null, endISO: string | null): number | null {
+  if (!startISO || !endISO) return null;
+  const start = new Date(`${startISO}T00:00:00`);
+  const end = new Date(`${endISO}T00:00:00`);
+  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+  return Math.round(days / 7);
+}
+
+// Estrutura do curso — só existe pras modalidades objetiva/discursiva
+// (MODALIDADES_COM_ESTRUTURA); Coordenação/Cronograma/Legislação Local têm
+// uma data cada, sincronizada com a SEGUNDA agenda Google fixa (diferente
+// da agenda do Cronograma completo do curso, na aba Concurso).
+function EstruturaCursoField({ project, course }: { project: Project; course: Course }) {
+  const updateProject = useUpdateProject();
+  const { syncStructureEvent, removeStructureEvent } = useGoogleImport();
+  const [subTab, setSubTab] = useState<EstruturaSubTab>("coordenacao");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const estrutura = course.estruturaCurso;
+
+  if (!course.modalidades || !MODALIDADES_COM_ESTRUTURA.includes(course.modalidades)) {
+    return (
+      <div className="hint" style={{ marginTop: 20 }}>
+        A Estrutura do curso (Coordenação, Cronograma, Materiais, Legislação Local) só se aplica às modalidades Objetiva ou Discursiva. Escolha a modalidade acima para editar.
+      </div>
+    );
+  }
+
+  async function persist(next: EstruturaCurso) {
+    await updateProject.mutateAsync({ ...project, course: { ...course, estruturaCurso: next } });
+  }
+  function setCoordenacao(patch: Partial<Coordenacao>) {
+    return persist({ ...estrutura, coordenacao: { ...estrutura.coordenacao, ...patch } });
+  }
+  function setCronograma(patch: Partial<CronogramaEstrutura>) {
+    return persist({ ...estrutura, cronograma: { ...estrutura.cronograma, ...patch } });
+  }
+  function setMateriais(patch: Partial<MateriaisEstrutura>) {
+    return persist({ ...estrutura, materiais: { ...estrutura.materiais, ...patch } });
+  }
+  function setLegislacaoLocal(patch: Partial<LegislacaoLocalEstrutura>) {
+    return persist({ ...estrutura, legislacaoLocal: { ...estrutura.legislacaoLocal, ...patch } });
+  }
+
+  async function setStructureDate(
+    current: { data: string | null; eventId: string | null },
+    dateISO: string,
+    summary: string,
+    apply: (data: string | null, eventId: string | null) => Promise<void>,
+  ) {
+    setError(null);
+    setBusy(true);
+    try {
+      if (!dateISO) {
+        if (current.eventId) await removeStructureEvent(current.eventId);
+        await apply(null, null);
+        return;
+      }
+      const eventId = await syncStructureEvent(summary, dateISO, `Projeto: ${project.name}`, current.eventId);
+      await apply(dateISO, eventId);
+    } catch (e) {
+      setError((e as Error).message || "Não foi possível sincronizar com a Agenda Google.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const weeks = diffWeeks(estrutura.cronograma.dataInicio, course.dataProvaChave);
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div className="section-title" style={{ fontSize: 14, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+        <span className="msi" style={{ fontSize: 16 }}>account_tree</span> Estrutura do curso
+      </div>
+      {error && <p className="hint" style={{ color: "var(--danger, #d33)" }}>{error}</p>}
+      <div className="row" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+        {ESTRUTURA_SUBTABS.map((t) => (
+          <button key={t} className={`btn sm ${subTab === t ? "primary" : "ghost"}`} onClick={() => setSubTab(t)}>
+            {ESTRUTURA_SUBTAB_LABEL[t]}
+          </button>
+        ))}
+      </div>
+
+      {subTab === "coordenacao" && (
+        <div className="stack" style={{ gap: 12 }}>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Coordenador(a)</label>
+            <input className="input" value={estrutura.coordenacao.coordenador} onChange={(e) => setCoordenacao({ coordenador: e.target.value })} />
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Encontro ao vivo de início do curso (obrigatório)</label>
+            <input
+              type="date" className="input" disabled={busy}
+              value={estrutura.coordenacao.encontroInicioData ?? ""}
+              onChange={(e) => setStructureDate(
+                { data: estrutura.coordenacao.encontroInicioData, eventId: estrutura.coordenacao.encontroInicioEventId },
+                e.target.value,
+                `Encontro ao vivo de início — ${project.name}`,
+                (data, eventId) => setCoordenacao({ encontroInicioData: data, encontroInicioEventId: eventId }),
+              )}
+            />
+            <span className="hint">{estrutura.coordenacao.encontroInicioEventId ? "Sincronizado com a Agenda Google." : "Defina a data para criar o evento na Agenda."}</span>
+          </div>
+        </div>
+      )}
+
+      {subTab === "cronograma" && (
+        <div className="stack" style={{ gap: 12 }}>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Tipo de cronograma (pode marcar mais de um)</label>
+            <div className="stack" style={{ gap: 4, marginTop: 4 }}>
+              {(Object.entries(TIPO_CRONOGRAMA_LABEL) as [TipoCronograma, string][]).map(([v, label]) => (
+                <label key={v} className="row" style={{ gap: 6, fontSize: 12.5, fontWeight: 400 }}>
+                  <input
+                    type="checkbox" checked={estrutura.cronograma.tipos.includes(v)}
+                    onChange={(e) => setCronograma({
+                      tipos: e.target.checked ? [...estrutura.cronograma.tipos, v] : estrutura.cronograma.tipos.filter((x) => x !== v),
+                    })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Data de início do cronograma</label>
+            <input
+              type="date" className="input" disabled={busy}
+              value={estrutura.cronograma.dataInicio ?? ""}
+              onChange={(e) => setStructureDate(
+                { data: estrutura.cronograma.dataInicio, eventId: estrutura.cronograma.dataInicioEventId },
+                e.target.value,
+                `Início do cronograma — ${project.name}`,
+                (data, eventId) => setCronograma({ dataInicio: data, dataInicioEventId: eventId }),
+              )}
+            />
+            <span className="hint">{estrutura.cronograma.dataInicioEventId ? "Sincronizado com a Agenda Google." : "Defina a data para criar o evento na Agenda."}</span>
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Duração do cronograma em semanas</label>
+            <input className="input" disabled value={weeks !== null ? `${weeks} semana(s)` : "Preencha a data de início e a Data da prova chave (aba Concurso)"} />
+          </div>
+        </div>
+      )}
+
+      {subTab === "materiais" && (
+        <div className="stack" style={{ gap: 12 }}>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Matérias</label>
+            <textarea className="input" value={estrutura.materiais.materias} onChange={(e) => setMateriais({ materias: e.target.value })} />
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label>PDFs (pode marcar mais de um)</label>
+            <div className="stack" style={{ gap: 4, marginTop: 4 }}>
+              {(Object.entries(PDF_OPCAO_LABEL) as [PdfOpcao, string][]).map(([v, label]) => (
+                <label key={v} className="row" style={{ gap: 6, fontSize: 12.5, fontWeight: 400, alignItems: "flex-start" }}>
+                  <input
+                    type="checkbox" checked={estrutura.materiais.pdfs.includes(v)}
+                    onChange={(e) => setMateriais({
+                      pdfs: e.target.checked ? [...estrutura.materiais.pdfs, v] : estrutura.materiais.pdfs.filter((x) => x !== v),
+                    })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subTab === "legislacaoLocal" && (
+        <div className="stack" style={{ gap: 14 }}>
+          <SimNaoField
+            title="LegProc"
+            explanation="Toda a legislação local elencada no edital, em formato de legproc, grifada e com acréscimo de comentários, quando necessário."
+            value={estrutura.legislacaoLocal.legproc}
+            onChange={(v) => setLegislacaoLocal({ legproc: v })}
+          />
+          <SimNaoField
+            title={'Lei Local grifada ("LegProc\'s Locais")'}
+            explanation={null}
+            value={estrutura.legislacaoLocal.leiLocalGrifada}
+            onChange={(v) => setLegislacaoLocal({ leiLocalGrifada: v })}
+          />
+          <SimNaoField
+            title="Flashcards"
+            explanation="Flashcards das principais leis locais (a critério do coordenador)."
+            value={estrutura.legislacaoLocal.flashcards}
+            onChange={(v) => setLegislacaoLocal({ flashcards: v })}
+          />
+          <SimNaoField
+            title="Principais artigos"
+            explanation="Material com a indicação dos principais artigos por lei (a critério do coordenador)."
+            value={estrutura.legislacaoLocal.principaisArtigos}
+            onChange={(v) => setLegislacaoLocal({ principaisArtigos: v })}
+          />
+          <SimNaoField
+            title="Legislação local em frases"
+            explanation="Material de legislação local em frases (a critério do coordenador)."
+            value={estrutura.legislacaoLocal.legislacaoEmFrases}
+            onChange={(v) => setLegislacaoLocal({ legislacaoEmFrases: v })}
+          />
+          <SimNaoField
+            title="Videoaulas"
+            explanation="Videoaulas com Professores Procuradores abordando Legislação local e Jurisprudência Local (quando pertinente) (a critério do coordenador)."
+            value={estrutura.legislacaoLocal.videoaulas}
+            onChange={(v) => setLegislacaoLocal({ videoaulas: v })}
+          />
+          <div className="field" style={{ margin: 0 }}>
+            <label>Data de início da parte local</label>
+            <input
+              type="date" className="input" disabled={busy}
+              value={estrutura.legislacaoLocal.dataInicioParteLocal ?? ""}
+              onChange={(e) => setStructureDate(
+                { data: estrutura.legislacaoLocal.dataInicioParteLocal, eventId: estrutura.legislacaoLocal.dataInicioParteLocalEventId },
+                e.target.value,
+                `Início da parte local — ${project.name}`,
+                (data, eventId) => setLegislacaoLocal({ dataInicioParteLocal: data, dataInicioParteLocalEventId: eventId }),
+              )}
+            />
+            <span className="hint">{estrutura.legislacaoLocal.dataInicioParteLocalEventId ? "Sincronizado com a Agenda Google." : "Defina a data para criar o evento na Agenda."}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SimNaoField({ title, explanation, value, onChange }: { title: string; explanation: string | null; value: SimNaoLista; onChange: (v: SimNaoLista) => void }) {
+  return (
+    <div className="card card-pad">
+      <b style={{ fontSize: 13 }}>{title}</b>
+      {explanation && <p className="hint" style={{ marginTop: 4 }}>{explanation}</p>}
+      <label className="row" style={{ gap: 6, fontSize: 12.5, fontWeight: 400, marginTop: 6 }}>
+        <input type="checkbox" checked={value.ativo} onChange={(e) => onChange({ ...value, ativo: e.target.checked })} />
+        Sim
+      </label>
+      {value.ativo && (
+        <textarea
+          className="input" style={{ marginTop: 6 }} placeholder="Listagem"
+          value={value.lista} onChange={(e) => onChange({ ...value, lista: e.target.value })}
+        />
+      )}
+    </div>
+  );
+}
+
+function PrecoInputs({ set, onPatch }: { set: PrecoSet; onPatch: (patch: Partial<PrecoSet>) => void }) {
+  return (
+    <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
+      <div className="field" style={{ margin: 0 }}>
+        <label>Ancoragem</label>
+        <input className="input" value={set.ancoragem} onChange={(e) => onPatch({ ancoragem: e.target.value })} />
+      </div>
+      <div className="field" style={{ margin: 0 }}>
+        <label>À vista</label>
+        <input className="input" value={set.aVista} onChange={(e) => onPatch({ aVista: e.target.value })} />
+      </div>
+      <div className="field" style={{ margin: 0 }}>
+        <label>Parcelamento</label>
+        <input className="input" value={set.parcelamento} onChange={(e) => onPatch({ parcelamento: e.target.value })} />
+      </div>
+    </div>
+  );
+}
+
+// Guia destacada "OFERTA" — preço único, exceto nas modalidades com correção
+// opcional (MODALIDADES_PRECO_DUPLO), onde vira dois preços (com/sem correção).
+function OfertaField({ project, course }: { project: Project; course: Course }) {
+  const updateProject = useUpdateProject();
+  const oferta = course.oferta;
+  const dual = Boolean(course.modalidades) && MODALIDADES_PRECO_DUPLO.includes(course.modalidades as Modalidade);
+
+  function persist(next: Oferta) {
+    return updateProject.mutateAsync({ ...project, course: { ...course, oferta: next } });
+  }
+  function setPreco(key: "preco" | "precoComCorrecao" | "precoSemCorrecao", patch: Partial<PrecoSet>) {
+    return persist({ ...oferta, [key]: { ...oferta[key], ...patch } });
+  }
+
+  return (
+    <div style={{ marginTop: 24, padding: 14, borderRadius: 12, background: "var(--accent-weak)", border: "1px solid var(--accent)" }}>
+      <div className="section-title" style={{ fontSize: 14, marginBottom: 10, display: "flex", alignItems: "center", gap: 8, color: "var(--accent-text)" }}>
+        <span className="msi" style={{ fontSize: 16 }}>sell</span> OFERTA
+      </div>
+      <b style={{ fontSize: 12.5, display: "block", marginBottom: 8 }}>Preço</b>
+      {dual ? (
+        <div className="stack" style={{ gap: 14 }}>
+          <div>
+            <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>Com correção</span>
+            <PrecoInputs set={oferta.precoComCorrecao} onPatch={(p) => setPreco("precoComCorrecao", p)} />
+          </div>
+          <div>
+            <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>Sem correção</span>
+            <PrecoInputs set={oferta.precoSemCorrecao} onPatch={(p) => setPreco("precoSemCorrecao", p)} />
+          </div>
+        </div>
+      ) : (
+        <PrecoInputs set={oferta.preco} onPatch={(p) => setPreco("preco", p)} />
       )}
     </div>
   );

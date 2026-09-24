@@ -2,7 +2,7 @@ import { useAppSettings } from "../../core/companies/appSettings";
 import {
   extractDriveFileId, fetchGoogleDocText, fetchGoogleSheetRows, getGoogleAccessToken, openDrivePicker, type SheetRow,
 } from "./googleSheets";
-import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from "./googleCalendar";
+import { createCalendarEvent, deleteCalendarEvent, SCHEDULE_CALENDAR_ID, STRUCTURE_CALENDAR_ID, updateCalendarEvent } from "./googleCalendar";
 
 // Wrapper compartilhado em cima de googleSheets.ts: cuida de checar as
 // credenciais configuradas em Administração e expõe duas operações simples
@@ -51,21 +51,37 @@ export function useGoogleImport() {
     return fetchGoogleDocText(clientId, fileId);
   }
 
-  // Sincroniza uma data do Cronograma completo do curso com a Agenda Google
-  // (ver googleCalendar.ts) — cria um evento novo, ou atualiza um já
-  // existente se passar o eventId.
+  // Sincroniza uma data do Cronograma completo do curso (aba Concurso) com
+  // a Agenda Google fixa (ver googleCalendar.ts) — cria um evento novo, ou
+  // atualiza um já existente se passar o eventId.
   async function syncScheduleEvent(summary: string, dateISO: string, description: string | undefined, existingEventId: string | null): Promise<string> {
     if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de sincronizar com a Agenda.");
     if (existingEventId) {
-      await updateCalendarEvent(clientId, existingEventId, summary, dateISO, description);
+      await updateCalendarEvent(clientId, SCHEDULE_CALENDAR_ID, existingEventId, summary, dateISO, description);
       return existingEventId;
     }
-    return createCalendarEvent(clientId, summary, dateISO, description);
+    return createCalendarEvent(clientId, SCHEDULE_CALENDAR_ID, summary, dateISO, description);
   }
 
   async function removeScheduleEvent(eventId: string): Promise<void> {
     if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de sincronizar com a Agenda.");
-    return deleteCalendarEvent(clientId, eventId);
+    return deleteCalendarEvent(clientId, SCHEDULE_CALENDAR_ID, eventId);
+  }
+
+  // Mesma coisa, mas na segunda agenda fixa — usada pelas datas da
+  // Estrutura do curso (Coordenação/Cronograma/Legislação Local).
+  async function syncStructureEvent(summary: string, dateISO: string, description: string | undefined, existingEventId: string | null): Promise<string> {
+    if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de sincronizar com a Agenda.");
+    if (existingEventId) {
+      await updateCalendarEvent(clientId, STRUCTURE_CALENDAR_ID, existingEventId, summary, dateISO, description);
+      return existingEventId;
+    }
+    return createCalendarEvent(clientId, STRUCTURE_CALENDAR_ID, summary, dateISO, description);
+  }
+
+  async function removeStructureEvent(eventId: string): Promise<void> {
+    if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de sincronizar com a Agenda.");
+    return deleteCalendarEvent(clientId, STRUCTURE_CALENDAR_ID, eventId);
   }
 
   return {
@@ -77,6 +93,8 @@ export function useGoogleImport() {
     docTextFromId,
     syncScheduleEvent,
     removeScheduleEvent,
+    syncStructureEvent,
+    removeStructureEvent,
     extractFileId: extractDriveFileId,
   };
 }
