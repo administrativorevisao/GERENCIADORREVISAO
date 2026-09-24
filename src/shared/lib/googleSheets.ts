@@ -10,7 +10,10 @@
 // hospedada pelo próprio Google, então o usuário pode navegar em todo o
 // Drive dele através dela; o app só recebe acesso ao arquivo específico que
 // for escolhido — não à conta inteira.
-const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.file";
+// "calendar.events" (não "calendar" completo): só permite criar/editar/
+// excluir eventos, sem ler ou apagar agendas inteiras — usado pra
+// sincronizar o Cronograma completo do curso com a Agenda Google.
+const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events";
 
 export type DrivePickerKind = "spreadsheets" | "documents" | "files";
 

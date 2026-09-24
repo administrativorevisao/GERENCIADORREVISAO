@@ -26,6 +26,17 @@ export interface Briefing {
 // Detalhes do curso/edital do projeto — o "documento único" que centraliza
 // as informações que todos os setores consultam (pedagógico, comercial,
 // marketing, CS…). Espelha defaultCourse()/EDITAL_FIELDS do app original.
+// Uma data do Cronograma completo do curso — sincronizada como evento de
+// dia inteiro na Agenda Google fixa (ver shared/lib/googleCalendar.ts).
+// googleEventId fica null até a primeira sincronização; depois disso,
+// reaproveitado pra ATUALIZAR o mesmo evento em vez de duplicar.
+export interface CronogramaItem {
+  id: string;
+  label: string;
+  date: string; // "YYYY-MM-DD"
+  googleEventId: string | null;
+}
+
 export interface Course {
   orgaoEstado: string;
   cargoCarreira: string;
@@ -35,7 +46,7 @@ export interface Course {
   linkConcurso: string;
   analiseEdital: string;
   disciplinas: string;
-  cronogramaCompleto: string;
+  cronogramaCompleto: CronogramaItem[];
   observacoes: string;
   coordenador: string;
   modalidades: string;
@@ -51,13 +62,13 @@ export interface Course {
 
 export const emptyCourse: Course = {
   orgaoEstado: "", cargoCarreira: "", vagas: "", remuneracao: "", banca: "", linkConcurso: "",
-  analiseEdital: "", disciplinas: "", cronogramaCompleto: "", observacoes: "", coordenador: "", modalidades: "",
+  analiseEdital: "", disciplinas: "", cronogramaCompleto: [], observacoes: "", coordenador: "", modalidades: "",
   inicioVendas: "", tempoAcesso: "", tipoCronograma: "", estruturaCurso: "", duracaoSemanas: "", preco: "",
   parcelamento: "", condicoesComercialCs: "",
 };
 
 export function courseHasData(course: Course): boolean {
-  return Object.values(course).some((v) => v.trim());
+  return Object.entries(course).some(([key, v]) => (key === "cronogramaCompleto" ? (v as CronogramaItem[]).length > 0 : (v as string).trim()));
 }
 
 export interface Project {

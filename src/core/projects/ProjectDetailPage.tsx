@@ -6,7 +6,7 @@ import { safeHref } from "../../shared/lib/safeUrl";
 import { useTasks } from "../tasks/useTasks";
 import { userName, useUsers } from "../team/useUsers";
 import { useProjects, useUpdateProject } from "./useProjects";
-import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type KeyDate, type Project, type ProjectDocument, type ProjectStatus } from "./types";
+import { emptyCourse, PROJECT_STATUS_LABEL, type Course, type CronogramaItem, type KeyDate, type Project, type ProjectDocument, type ProjectStatus } from "./types";
 import { COURSE_TYPE_LABEL, GUIA_TEMPLATES, type CourseType, type GuiaContent, type ScheduledMessage, type SectorLink } from "./guiaTemplates";
 import { STANDARD_DEPARTMENTS } from "../companies/companies";
 import { STATUS_LABEL } from "../tasks/types";
@@ -217,7 +217,14 @@ const COURSE_FIELD_GROUPS: Record<"edital" | "course", { title: string; intro: s
     ],
   },
 };
-const LONG_FIELDS = new Set<keyof Course>(["analiseEdital", "cronogramaCompleto", "estruturaCurso", "observacoes", "disciplinas"]);
+const LONG_FIELDS = new Set<keyof Course>(["estruturaCurso", "observacoes", "disciplinas"]);
+// Campos que guardam um link (não texto) — renderizados com um "Abrir ↗"
+// clicável ao lado do rótulo, em vez de exigir copiar/colar o valor pra
+// abrir no navegador.
+const URL_FIELDS = new Set<keyof Course>(["linkConcurso", "analiseEdital"]);
+// cronogramaCompleto não é mais um campo de texto — é a lista de datas
+// sincronizada com a Agenda Google, renderizada à parte (ver CronogramaField).
+const FIELDS_WITH_CUSTOM_UI = new Set<keyof Course>(["cronogramaCompleto"]);
 
 function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital" | "course" }) {
   const updateProject = useUpdateProject();
@@ -229,9 +236,7 @@ function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital"
   const changed = draft !== null;
   const group = COURSE_FIELD_GROUPS[groupKey];
   const longFieldsInGroup = group.fields.filter((f) => LONG_FIELDS.has(f.key));
-  const [importTarget, setImportTarget] = useState<keyof Course>(
-    () => (longFieldsInGroup.find((f) => f.key === "analiseEdital") ?? longFieldsInGroup[0])?.key ?? "analiseEdital",
-  );
+  const [importTarget, setImportTarget] = useState<keyof Course>(() => longFieldsInGroup[0]?.key ?? "disciplinas");
 
   function setField(key: keyof Course, value: string) {
     setDraft({ ...course, [key]: value });
@@ -278,21 +283,124 @@ function CourseTab({ project, groupKey }: { project: Project; groupKey: "edital"
       )}
       {importError && <p className="hint" style={{ color: "var(--danger, #d33)" }}>{importError}</p>}
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-        {group.fields.map((f) => (
-          <div className="field" key={f.key} style={{ margin: 0 }}>
-            <label htmlFor={`course-${f.key}`}>{f.label}</label>
-            {LONG_FIELDS.has(f.key) ? (
-              <textarea id={`course-${f.key}`} className="input" value={course[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
-            ) : (
-              <input id={`course-${f.key}`} className="input" value={course[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
-            )}
-          </div>
-        ))}
+        {group.fields.filter((f) => !FIELDS_WITH_CUSTOM_UI.has(f.key)).map((f) => {
+          const value = course[f.key] as string;
+          const isUrl = URL_FIELDS.has(f.key);
+          return (
+            <div className="field" key={f.key} style={{ margin: 0 }}>
+              <label htmlFor={`course-${f.key}`}>
+                {f.label}
+                {isUrl && value.trim() && (
+                  <a href={safeHref(value)} target="_blank" rel="noreferrer" style={{ marginLeft: 8, fontWeight: 400, fontSize: 11.5 }}>
+                    <span className="msi" style={{ fontSize: 13, verticalAlign: "middle" }}>open_in_new</span> Abrir
+                  </a>
+                )}
+              </label>
+              {LONG_FIELDS.has(f.key) ? (
+                <textarea id={`course-${f.key}`} className="input" value={value} onChange={(e) => setField(f.key, e.target.value)} />
+              ) : (
+                <input
+                  id={`course-${f.key}`} className="input" type={isUrl ? "url" : "text"}
+                  placeholder={isUrl ? "https://..." : undefined}
+                  value={value} onChange={(e) => setField(f.key, e.target.value)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
       {changed && (
         <button className="btn primary sm" style={{ marginTop: 14 }} onClick={save} disabled={updateProject.isPending}>
           {updateProject.isPending ? "Salvando…" : "Salvar dados do curso"}
         </button>
+      )}
+      {group.fields.some((f) => f.key === "cronogramaCompleto") && <CronogramaField project={project} course={course} />}
+    </div>
+  );
+}
+
+// Cronograma completo do curso: cada data digitada aqui é sincronizada
+// automaticamente como evento de dia inteiro na Agenda Google fixa (ver
+// shared/lib/googleCalendar.ts) — cria na hora de adicionar, atualiza se
+// editar, remove da Agenda se excluir daqui.
+function CronogramaField({ project, course }: { project: Project; course: Course }) {
+  const updateProject = useUpdateProject();
+  const { syncScheduleEvent, removeScheduleEvent } = useGoogleImport();
+  const [label, setLabel] = useState("");
+  const [date, setDate] = useState(todayISO());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const items = (course.cronogramaCompleto ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
+
+  async function persist(next: CronogramaItem[]) {
+    await updateProject.mutateAsync({ ...project, course: { ...course, cronogramaCompleto: next } });
+  }
+
+  async function addItem() {
+    if (!label.trim() || !date) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const eventId = await syncScheduleEvent(label.trim(), date, `Projeto: ${project.name}`, null);
+      const item: CronogramaItem = { id: newId("cron"), label: label.trim(), date, googleEventId: eventId };
+      await persist([...items, item]);
+      setLabel("");
+    } catch (e) {
+      setError((e as Error).message || "Não foi possível sincronizar com a Agenda Google.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeItem(item: CronogramaItem) {
+    setError(null);
+    setBusy(true);
+    try {
+      if (item.googleEventId) {
+        try {
+          await removeScheduleEvent(item.googleEventId);
+        } catch (e) {
+          setError(`O item foi removido daqui, mas não foi possível excluir o evento da Agenda: ${(e as Error).message}`);
+        }
+      }
+      await persist(items.filter((i) => i.id !== item.id));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div className="section-title" style={{ fontSize: 13, marginBottom: 4 }}>Cronograma completo do curso</div>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Cada data adicionada aqui entra automaticamente como evento na Agenda Google do curso.
+      </p>
+      {error && <p className="hint" style={{ color: "var(--danger, #d33)" }}>{error}</p>}
+      <div className="row" style={{ marginBottom: 12 }}>
+        <div className="field" style={{ margin: 0, flex: 2 }}>
+          <input className="input" placeholder="ex: Aula inaugural, Prova, Resultado" value={label} onChange={(e) => setLabel(e.target.value)} />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <button className="btn primary sm" onClick={addItem} disabled={!label.trim() || busy}>
+          {busy ? "Sincronizando…" : "+ Adicionar"}
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <div className="hint">Nenhuma data adicionada ainda.</div>
+      ) : (
+        items.map((item) => (
+          <div className="list-item" key={item.id}>
+            <div className="stack" style={{ flex: 1 }}>
+              <b style={{ fontSize: 13.5 }}>{item.label}</b>
+              <span className="muted" style={{ fontSize: 11.5 }}>
+                {fmtDate(item.date)} {item.googleEventId ? "· na Agenda Google" : ""}
+              </span>
+            </div>
+            <button className="btn sm ghost" onClick={() => removeItem(item)} disabled={busy}>Remover</button>
+          </div>
+        ))
       )}
     </div>
   );

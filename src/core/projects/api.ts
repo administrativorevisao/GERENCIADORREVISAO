@@ -7,9 +7,17 @@ const PROGRAMS_TABLE = "programs";
 
 // Projetos criados antes dos recursos de subprogramas/documentos não têm
 // esses campos salvos — normaliza pra não quebrar quem espera o formato novo.
+// cronogramaCompleto também mudou de texto livre pra lista de datas
+// sincronizadas com a Agenda — qualquer valor antigo (string) some, já
+// que não tem como convertê-lo automaticamente em datas de verdade.
 export async function listProjects(companyId: string): Promise<Project[]> {
   const rows = await listRows<Project>(PROJECTS_TABLE, companyId);
-  return rows.map((p) => ({ ...p, subProgramId: p.subProgramId ?? null, documents: p.documents ?? [] }));
+  return rows.map((p) => ({
+    ...p,
+    subProgramId: p.subProgramId ?? null,
+    documents: p.documents ?? [],
+    course: p.course ? { ...p.course, cronogramaCompleto: Array.isArray(p.course.cronogramaCompleto) ? p.course.cronogramaCompleto : [] } : p.course,
+  }));
 }
 
 // Programas criados antes do recurso de subprogramas não têm esse campo

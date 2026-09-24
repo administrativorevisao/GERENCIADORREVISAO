@@ -2,6 +2,7 @@ import { useAppSettings } from "../../core/companies/appSettings";
 import {
   extractDriveFileId, fetchGoogleDocText, fetchGoogleSheetRows, getGoogleAccessToken, openDrivePicker, type SheetRow,
 } from "./googleSheets";
+import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from "./googleCalendar";
 
 // Wrapper compartilhado em cima de googleSheets.ts: cuida de checar as
 // credenciais configuradas em Administração e expõe duas operações simples
@@ -50,6 +51,23 @@ export function useGoogleImport() {
     return fetchGoogleDocText(clientId, fileId);
   }
 
+  // Sincroniza uma data do Cronograma completo do curso com a Agenda Google
+  // (ver googleCalendar.ts) — cria um evento novo, ou atualiza um já
+  // existente se passar o eventId.
+  async function syncScheduleEvent(summary: string, dateISO: string, description: string | undefined, existingEventId: string | null): Promise<string> {
+    if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de sincronizar com a Agenda.");
+    if (existingEventId) {
+      await updateCalendarEvent(clientId, existingEventId, summary, dateISO, description);
+      return existingEventId;
+    }
+    return createCalendarEvent(clientId, summary, dateISO, description);
+  }
+
+  async function removeScheduleEvent(eventId: string): Promise<void> {
+    if (!clientId) throw new Error("Configure o Client ID do Google em Administração antes de sincronizar com a Agenda.");
+    return deleteCalendarEvent(clientId, eventId);
+  }
+
   return {
     ready: Boolean(clientId && apiKey),
     pickSpreadsheet,
@@ -57,6 +75,8 @@ export function useGoogleImport() {
     pickAnyFile,
     sheetRowsFromId,
     docTextFromId,
+    syncScheduleEvent,
+    removeScheduleEvent,
     extractFileId: extractDriveFileId,
   };
 }
