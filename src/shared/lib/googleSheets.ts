@@ -153,7 +153,13 @@ export async function getGoogleAccessToken(clientId: string): Promise<string> {
           resolve(resp.access_token);
         },
       });
-      tokenClient.requestAccessToken({ prompt: "" });
+      // "select_account" (não "" silencioso): com mais de uma conta Google
+      // logada no navegador, o modo silencioso usa a conta "ativa" sem
+      // perguntar — se não for a conta com acesso real ao arquivo (ex: a
+      // conta da empresa), a importação falha com "403: the user has not
+      // granted the app read access" sem nenhuma tela de erro clara sobre
+      // o motivo. Forçar a escolha evita isso.
+      tokenClient.requestAccessToken({ prompt: "select_account" });
     } catch (e) {
       clearTimeout(timeout);
       reject(e as Error);
