@@ -13,6 +13,7 @@ export const NAV: NavItem[] = [
   { id: "dashboard", label: "Dashboard", path: "/", icon: "bar_chart" },
   { id: "calendar", label: "Calendário", path: "/calendario", icon: "calendar_month", group: "Visualizações" },
   { id: "projects", label: "Projetos", path: "/projetos", icon: "folder" },
+  { id: "sprints", label: "Sprints", path: "/sprints", icon: "sprint" },
   { id: "tasks", label: "Tarefas", path: "/tarefas", icon: "task_alt" },
   { id: "processCenter", label: "Central de Processos", path: "/processos", icon: "inventory_2" },
   { id: "meetings", label: "Reuniões", path: "/reunioes", icon: "groups" },

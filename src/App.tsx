@@ -7,6 +7,7 @@ import { AdminPage } from "./shared/admin/AdminPage";
 import { DashboardPage } from "./core/dashboard/DashboardPage";
 import { ProjectsPage } from "./core/projects/ProjectsPage";
 import { ProjectDetailPage } from "./core/projects/ProjectDetailPage";
+import { SprintsPage } from "./core/sprints/SprintsPage";
 import { TasksPage } from "./core/tasks/TasksPage";
 import { ProcessCenterPage } from "./core/tasks/ProcessCenterPage";
 import { CalendarPage } from "./core/calendar/CalendarPage";
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/calendario" element={<CalendarPage />} />
         <Route path="/projetos" element={<ProjectsPage />} />
         <Route path="/projetos/:id" element={<ProjectDetailPage />} />
+        <Route path="/sprints" element={<SprintsPage />} />
         <Route path="/tarefas" element={<TasksPage />} />
         <Route path="/processos" element={<ProcessCenterPage />} />
         <Route path="/reunioes" element={<MeetingsPage />} />
